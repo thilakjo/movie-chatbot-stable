@@ -1,3 +1,5 @@
+// app/layout.tsx (Corrected)
+
 import type { Metadata } from "next";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
@@ -14,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="bg-gray-50 text-gray-900">
         <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>

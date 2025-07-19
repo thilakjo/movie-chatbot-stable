@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       where: { id: session.user.id },
       data: {
         movieRatings: ratings,
-        onboardingStep: "ONBOARDING_COMPLETE",
+        onboardingStep: "NEEDS_CASUAL_QUESTIONS",
       },
     });
     return NextResponse.json({ success: true });
