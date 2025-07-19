@@ -1,15 +1,13 @@
-// components/MovieCard.tsx (Corrected)
-
 "use client";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { MovieWithDetails } from "@/lib/types"; // <-- CORRECTED IMPORT
+import { MovieWithDetails } from "@/lib/types";
 
 const FALLBACK_POSTER = "/fallback-poster.png";
 
 interface MovieCardProps {
   title: string;
-  initialData?: MovieWithDetails; // Use the shared type
+  initialData?: MovieWithDetails;
   onRemove?: () => void;
   children?: React.ReactNode;
 }
@@ -26,7 +24,8 @@ export function MovieCard({
   const [isFlipped, setIsFlipped] = useState(false);
 
   useEffect(() => {
-    if (!details) {
+    if (!details?.year) {
+      // Fetch only if we don't have full details
       const fetchDetails = async () => {
         try {
           const res = await fetch("/api/tmdb", {
@@ -34,13 +33,8 @@ export function MovieCard({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title }),
           });
-          if (res.ok) {
-            const data = await res.json();
-            // We cast the fetched data to our shared type
-            setDetails(data as MovieWithDetails);
-          } else {
-            setDetails({ posterUrl: FALLBACK_POSTER } as MovieWithDetails);
-          }
+          if (res.ok) setDetails(await res.json());
+          else setDetails({ posterUrl: FALLBACK_POSTER } as MovieWithDetails);
         } catch {
           setDetails({ posterUrl: FALLBACK_POSTER } as MovieWithDetails);
         }
@@ -60,7 +54,7 @@ export function MovieCard({
         }`}
       >
         {/* Front */}
-        <div className="absolute w-full h-full backface-hidden">
+        <div className="absolute w-full h-full backface-hidden group">
           {details ? (
             <img
               src={details.posterUrl || FALLBACK_POSTER}
@@ -71,11 +65,16 @@ export function MovieCard({
               }}
             />
           ) : (
-            <div className="w-full h-full bg-gray-200 rounded-lg animate-pulse"></div>
+            <div className="w-full h-full bg-slate-200 rounded-lg animate-pulse"></div>
           )}
           <div className="absolute bottom-0 w-full p-2 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
             <h3 className="text-white text-sm font-bold truncate">{title}</h3>
           </div>
+          {children && (
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 gap-2">
+              {children}
+            </div>
+          )}
         </div>
         {/* Back */}
         <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex flex-col justify-between text-left">
@@ -111,7 +110,6 @@ export function MovieCard({
           )}
         </div>
       </div>
-      {children}
     </div>
   );
 }

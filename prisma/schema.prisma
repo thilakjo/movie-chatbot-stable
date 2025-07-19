@@ -24,18 +24,21 @@ model User {
 }
 // prisma/schema.prisma (add the leadActor field)
 
+// prisma/schema.prisma (Corrected UserMovie model)
 model UserMovie {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movieTitle  String
   status      String
-
+  
+  // --- DETAILED FIELDS FOR CARDS ---
   posterUrl   String?
   year        Int?
   director    String?
   imdbRating  String?
-  leadActor   String? // <-- ADD THIS NEW FIELD
+  leadActor   String?
+  // --- END DETAILED FIELDS ---
 
   rating      Int?
   feedback    Json?

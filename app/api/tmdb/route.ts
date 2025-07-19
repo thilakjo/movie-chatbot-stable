@@ -1,5 +1,3 @@
-// app/api/tmdb/route.ts (Upgraded to fetch Lead Actor)
-
 import { NextResponse } from "next/server";
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -14,7 +12,6 @@ async function fetchFromTMDb(title: string) {
       imdbRating: null,
       leadActor: null,
     };
-
   const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
     title
   )}`;
@@ -33,13 +30,14 @@ async function fetchFromTMDb(title: string) {
 
     const movie = searchData.results[0];
     const movieId = movie.id;
-
     const detailsUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_API_KEY}`;
-    const detailsRes = await fetch(detailsUrl);
-    const detailsData = await detailsRes.json();
-
     const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
-    const creditsRes = await fetch(creditsUrl);
+
+    const [detailsRes, creditsRes] = await Promise.all([
+      fetch(detailsUrl),
+      fetch(creditsUrl),
+    ]);
+    const detailsData = await detailsRes.json();
     const creditsData = await creditsRes.json();
 
     return {
@@ -54,12 +52,11 @@ async function fetchFromTMDb(title: string) {
         : null,
       director:
         creditsData.crew?.find((p: any) => p.job === "Director")?.name || null,
-      leadActor: creditsData.cast?.[0]?.name || null, // Get the top-billed actor
+      leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch (error) {
     console.error(`Error fetching from TMDb for "${title}":`, error);
   }
-
   return {
     posterUrl: FALLBACK_POSTER,
     year: null,

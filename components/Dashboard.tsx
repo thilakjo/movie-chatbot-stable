@@ -1,5 +1,3 @@
-// components/Dashboard.tsx (Corrected)
-
 "use client";
 import { useState, useEffect } from "react";
 import { MovieCard } from "./MovieCard";
@@ -19,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { LoadingAnimation } from "./LoadingAnimation";
-import { MovieWithDetails, Recommendation } from "@/lib/types"; // <-- CORRECTED IMPORT
+import { MovieWithDetails, Recommendation } from "@/lib/types";
 
 const FEEDBACK_QUESTIONS = [
   { q: "How was the pacing?", o: ["Too slow", "Just right", "Too fast"] },
@@ -117,8 +115,8 @@ export function Dashboard({
 
   return (
     <div className="max-w-7xl mx-auto animate-fadeIn pb-24">
-      <div className="text-center mb-8 flex flex-col md:flex-row justify-center items-center gap-4">
-        <h1 className="text-4xl font-bold">Your Movie Dashboard</h1>
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm py-4 mb-8 flex flex-col md:flex-row justify-center items-center gap-4 border-b">
+        <h1 className="text-3xl font-bold">Your Movie Dashboard</h1>
         <Button onClick={fetchAllData} disabled={loading}>
           {loading ? "Finding..." : "Get New Recommendations"}
         </Button>
@@ -127,7 +125,7 @@ export function Dashboard({
       {loading && <LoadingAnimation />}
 
       {!loading && recommendations.length > 0 && (
-        <div className="mb-12">
+        <div className="mb-12 px-12">
           <h2 className="text-3xl font-bold mb-6 text-center">
             Recommended For You
           </h2>
@@ -142,45 +140,43 @@ export function Dashboard({
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
                   <MovieCard title={rec.title}>
-                    <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleListAction(rec.title, "WATCHLIST");
-                        }}
-                        size="sm"
-                        className="w-full text-xs h-7"
-                      >
-                        Watchlist
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMarkAsWatched(rec);
-                        }}
-                        size="sm"
-                        className="w-full text-xs h-7"
-                      >
-                        Watched
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleListAction(rec.title, "DISMISSED");
-                        }}
-                        size="sm"
-                        variant="ghost"
-                        className="w-full text-xs h-7 hover:bg-white/20 hover:text-white"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleListAction(rec.title, "WATCHLIST");
+                      }}
+                      size="sm"
+                      className="w-full text-xs h-7"
+                    >
+                      Watchlist
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkAsWatched(rec);
+                      }}
+                      size="sm"
+                      className="w-full text-xs h-7"
+                    >
+                      Watched
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleListAction(rec.title, "DISMISSED");
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs h-7 bg-black/50 border-white/50 text-white hover:bg-black/70"
+                    >
+                      Dismiss
+                    </Button>
                   </MovieCard>
                 </CarouselItem>
               ))}
             </CarouselContent>
-            <CarouselPrevious className="ml-16" />
-            <CarouselNext className="mr-16" />
+            <CarouselPrevious />
+            <CarouselNext />
           </Carousel>
         </div>
       )}

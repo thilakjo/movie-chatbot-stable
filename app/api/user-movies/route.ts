@@ -1,5 +1,3 @@
-// app/api/user-movies/route.ts (Upgraded to save Lead Actor)
-
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
@@ -8,6 +6,7 @@ import { NextResponse } from "next/server";
 const prisma = new PrismaClient();
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
+// (This helper function should be identical to the one in tmdb/route.ts)
 async function getMovieDetails(title: string) {
   if (!TMDB_API_KEY) return {};
   try {
@@ -20,13 +19,14 @@ async function getMovieDetails(title: string) {
 
     const movie = searchData.results[0];
     const movieId = movie.id;
-
     const detailsUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_API_KEY}`;
-    const detailsRes = await fetch(detailsUrl);
-    const detailsData = await detailsRes.json();
-
     const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
-    const creditsRes = await fetch(creditsUrl);
+
+    const [detailsRes, creditsRes] = await Promise.all([
+      fetch(detailsUrl),
+      fetch(creditsUrl),
+    ]);
+    const detailsData = await detailsRes.json();
     const creditsData = await creditsRes.json();
 
     return {
