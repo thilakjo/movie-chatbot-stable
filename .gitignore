@@ -8,7 +8,9 @@
 
 # testing
 /coverage
-
+# ... other lines
+.env*.local
+.env
 # next.js
 /.next/
 /out/
