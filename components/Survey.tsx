@@ -67,7 +67,7 @@ export function Survey() {
             htmlFor="mood"
             className="block text-gray-700 font-semibold mb-2"
           >
-            What's your current mood for a movie?
+            What&apos;s your current mood for a movie?
           </label>
           <input
             type="text"
