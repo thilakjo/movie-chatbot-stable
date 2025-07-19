@@ -20,7 +20,8 @@ import {
 interface Movie {
   id: string;
   movieTitle: string;
-  status: "WATCHLIST" | "WATCHED";
+  status: string;
+  order?: number;
 }
 interface Recommendation {
   title: string;
@@ -49,14 +50,17 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
       const data = await res.json();
-      setMovies(data.userMovies || []);
+      setMovies(
+        data.userMovies.sort(
+          (a: Movie, b: Movie) => (a.order ?? 0) - (b.order ?? 0)
+        ) || []
+      );
       setRecommendations(data.recommendations || []);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch initial data on load
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -77,7 +81,7 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
       }),
     });
     if (status !== "DISMISSED") {
-      fetchAllData(); // Refresh lists if movie was added
+      fetchAllData();
     }
   };
 
@@ -108,6 +112,12 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
       <h1 className="text-4xl font-bold mb-8 text-center">
         Your Movie Dashboard
       </h1>
+
+      {loading && !recommendations.length && (
+        <p className="text-center text-gray-500 my-8">
+          Finding your first recommendations...
+        </p>
+      )}
 
       {recommendations.length > 0 && (
         <div className="mb-12">
