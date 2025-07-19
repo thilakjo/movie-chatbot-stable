@@ -1,6 +1,6 @@
 // app/api/recommend/route.ts (Simplified)
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -22,9 +22,24 @@ export async function POST() {
     select: { preferences: true, movieRatings: true, movies: true },
   });
 
-  const excludeTitles = new Set([
-    ...(user?.movieRatings ? Object.keys(user.movieRatings) : []),
-    ...(user?.movies?.map((m) => m.movieTitle) || []),
+  interface UserPreferences {
+    [key: string]: any;
+  }
+
+  interface UserMovie {
+    movieTitle: string;
+    [key: string]: any;
+  }
+
+  interface User {
+    preferences: UserPreferences;
+    movieRatings: Record<string, any>;
+    movies: UserMovie[];
+  }
+
+  const excludeTitles: Set<string> = new Set([
+    ...(user?.movieRatings ? Object.keys((user as User).movieRatings) : []),
+    ...(user?.movies?.map((m: UserMovie) => m.movieTitle) || []),
   ]);
 
   const prompt = `You are a movie expert. The user's preferences are: ${JSON.stringify(

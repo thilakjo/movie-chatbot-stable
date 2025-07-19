@@ -1,6 +1,6 @@
 // app/api/casual-questions/route.ts
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";

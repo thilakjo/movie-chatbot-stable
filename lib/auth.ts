@@ -1,4 +1,4 @@
-// lib/auth.ts
+// lib/auth.ts (The single source of truth)
 
 import { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
