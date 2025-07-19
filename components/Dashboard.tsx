@@ -12,7 +12,9 @@ import { MovieCard } from "./MovieCard"; // Import our new component
 interface Movie {
   id: string;
   movieTitle: string;
-  status: "WATCHLIST" | "WATCHED";
+  status: string; // Changed from "WATCHLIST" | "WATCHED" to string
+  posterUrl?: string;
+  order?: number;
 }
 interface Recommendation {
   title: string;
