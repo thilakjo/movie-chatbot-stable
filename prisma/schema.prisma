@@ -22,22 +22,20 @@ model User {
   movieRatings    Json?
   movies          UserMovie[] // Relation to the new UserMovie table
 }
-
-// prisma/schema.prisma (Updated UserMovie model)
+// prisma/schema.prisma (add the leadActor field)
 
 model UserMovie {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movieTitle  String
-  status      String   // "WATCHLIST" or "WATCHED"
-  
-  // --- NEW DETAILED FIELDS ---
+  status      String
+
   posterUrl   String?
   year        Int?
   director    String?
   imdbRating  String?
-  // --- END NEW FIELDS ---
+  leadActor   String? // <-- ADD THIS NEW FIELD
 
   rating      Int?
   feedback    Json?
@@ -48,7 +46,6 @@ model UserMovie {
 
   @@unique([userId, movieTitle])
 }
-
 // --- DEFAULT NEXTAUTH.JS MODELS ---
 model Account {
   id                String  @id @default(cuid())

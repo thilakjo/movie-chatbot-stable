@@ -1,3 +1,5 @@
+// components/Dashboard.tsx (Corrected)
+
 "use client";
 import { useState, useEffect } from "react";
 import { MovieCard } from "./MovieCard";
@@ -16,16 +18,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LoadingAnimation } from "./LoadingAnimation";
+import { MovieWithDetails, Recommendation } from "@/lib/types"; // <-- CORRECTED IMPORT
 
-interface Movie {
-  id: string;
-  movieTitle: string;
-  status: string;
-  posterUrl?: string | null;
-}
-interface Recommendation {
-  title: string;
-}
 const FEEDBACK_QUESTIONS = [
   { q: "How was the pacing?", o: ["Too slow", "Just right", "Too fast"] },
   {
@@ -36,10 +31,14 @@ const FEEDBACK_QUESTIONS = [
 ];
 const ITEMS_PER_PAGE = 8;
 
-export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
+export function Dashboard({
+  initialMovies,
+}: {
+  initialMovies: MovieWithDetails[];
+}) {
   const [movies, setMovies] = useState(initialMovies);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [feedbackMovie, setFeedbackMovie] = useState<Recommendation | null>(
     null
   );
@@ -52,12 +51,21 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
       const data = await res.json();
-      setMovies(data.userMovies || []);
+      setMovies(
+        data.userMovies.sort(
+          (a: MovieWithDetails, b: MovieWithDetails) =>
+            (a.order ?? 0) - (b.order ?? 0)
+        ) || []
+      );
       setRecommendations(data.recommendations || []);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAllData();
+  }, []);
 
   const handleListAction = async (
     title: string,
@@ -75,15 +83,6 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
       }),
     });
     if (status !== "DISMISSED") fetchAllData();
-  };
-
-  const handleRemove = async (movieTitle: string) => {
-    setMovies((prev) => prev.filter((m) => m.movieTitle !== movieTitle));
-    await fetch("/api/user-movies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ movieTitle, status: "REMOVED" }),
-    });
   };
 
   const handleMarkAsWatched = (rec: Recommendation) => {
@@ -104,6 +103,15 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
     }
   };
 
+  const handleRemove = async (movieTitle: string) => {
+    setMovies((prev) => prev.filter((m) => m.movieTitle !== movieTitle));
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieTitle, status: "REMOVED" }),
+    });
+  };
+
   const watchlist = movies.filter((m) => m.status === "WATCHLIST");
   const watched = movies.filter((m) => m.status === "WATCHED");
 
@@ -116,12 +124,17 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
         </Button>
       </div>
 
-      {recommendations.length > 0 && (
+      {loading && <LoadingAnimation />}
+
+      {!loading && recommendations.length > 0 && (
         <div className="mb-12">
           <h2 className="text-3xl font-bold mb-6 text-center">
             Recommended For You
           </h2>
-          <Carousel className="w-full" opts={{ align: "start", loop: true }}>
+          <Carousel
+            className="w-full"
+            opts={{ align: "start", loop: recommendations.length > 5 }}
+          >
             <CarouselContent className="-ml-4">
               {recommendations.map((rec) => (
                 <CarouselItem
@@ -129,40 +142,37 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
                   <MovieCard title={rec.title}>
-                    <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleListAction(rec.title, "WATCHLIST");
                         }}
-                        size="icon"
-                        className="bg-green-600 hover:bg-green-700 h-8 w-8"
+                        size="sm"
+                        className="w-full text-xs h-7"
                       >
-                        {" "}
-                        L{" "}
+                        Watchlist
                       </Button>
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMarkAsWatched(rec);
                         }}
-                        size="icon"
-                        className="h-8 w-8"
+                        size="sm"
+                        className="w-full text-xs h-7"
                       >
-                        {" "}
-                        W{" "}
+                        Watched
                       </Button>
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleListAction(rec.title, "DISMISSED");
                         }}
-                        size="icon"
+                        size="sm"
                         variant="ghost"
-                        className="h-8 w-8"
+                        className="w-full text-xs h-7 hover:bg-white/20 hover:text-white"
                       >
-                        {" "}
-                        X{" "}
+                        Dismiss
                       </Button>
                     </div>
                   </MovieCard>
@@ -193,7 +203,7 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
               <MovieCard
                 key={movie.id}
                 title={movie.movieTitle}
-                initialPoster={movie.posterUrl || undefined}
+                initialData={movie}
                 onRemove={() => handleRemove(movie.movieTitle)}
               />
             ))}
@@ -219,7 +229,7 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
                 <MovieCard
                   key={movie.id}
                   title={movie.movieTitle}
-                  initialPoster={movie.posterUrl || undefined}
+                  initialData={movie}
                   onRemove={() => handleRemove(movie.movieTitle)}
                 />
               )

@@ -1,44 +1,32 @@
+// components/MovieCard.tsx (Corrected)
+
 "use client";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { MovieWithDetails } from "@/lib/types"; // <-- CORRECTED IMPORT
 
 const FALLBACK_POSTER = "/fallback-poster.png";
 
 interface MovieCardProps {
   title: string;
-  initialPoster?: string;
+  initialData?: MovieWithDetails; // Use the shared type
   onRemove?: () => void;
   children?: React.ReactNode;
 }
 
-interface MovieDetails {
-  posterUrl: string;
-  year: number | null;
-  director: string | null;
-  imdbRating: string | null;
-}
-
 export function MovieCard({
   title,
-  initialPoster,
+  initialData,
   onRemove,
   children,
 }: MovieCardProps) {
-  const [details, setDetails] = useState<MovieDetails | null>(
-    initialPoster
-      ? {
-          posterUrl: initialPoster,
-          year: null,
-          director: null,
-          imdbRating: null,
-        }
-      : null
+  const [details, setDetails] = useState<MovieWithDetails | null>(
+    initialData || null
   );
   const [isFlipped, setIsFlipped] = useState(false);
 
   useEffect(() => {
-    // Only fetch details if they weren't provided initially
-    if (!initialPoster) {
+    if (!details) {
       const fetchDetails = async () => {
         try {
           const res = await fetch("/api/tmdb", {
@@ -48,27 +36,18 @@ export function MovieCard({
           });
           if (res.ok) {
             const data = await res.json();
-            setDetails(data);
+            // We cast the fetched data to our shared type
+            setDetails(data as MovieWithDetails);
           } else {
-            setDetails({
-              posterUrl: FALLBACK_POSTER,
-              year: null,
-              director: null,
-              imdbRating: null,
-            });
+            setDetails({ posterUrl: FALLBACK_POSTER } as MovieWithDetails);
           }
         } catch {
-          setDetails({
-            posterUrl: FALLBACK_POSTER,
-            year: null,
-            director: null,
-            imdbRating: null,
-          });
+          setDetails({ posterUrl: FALLBACK_POSTER } as MovieWithDetails);
         }
       };
       fetchDetails();
     }
-  }, [title, initialPoster]);
+  }, [title, details]);
 
   return (
     <div
@@ -80,7 +59,7 @@ export function MovieCard({
           isFlipped ? "rotate-y-180" : ""
         }`}
       >
-        {/* Front of Card (Poster) */}
+        {/* Front */}
         <div className="absolute w-full h-full backface-hidden">
           {details ? (
             <img
@@ -98,11 +77,11 @@ export function MovieCard({
             <h3 className="text-white text-sm font-bold truncate">{title}</h3>
           </div>
         </div>
-        {/* Back of Card (Details) */}
-        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex flex-col justify-between">
+        {/* Back */}
+        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex flex-col justify-between text-left">
           <div>
-            <h4 className="font-bold text-lg mb-2">{title}</h4>
-            <div className="text-sm space-y-1">
+            <h4 className="font-bold text-base mb-2">{title}</h4>
+            <div className="text-xs space-y-1">
               <p>
                 <strong>Year:</strong> {details?.year || "N/A"}
               </p>
@@ -110,7 +89,10 @@ export function MovieCard({
                 <strong>Director:</strong> {details?.director || "N/A"}
               </p>
               <p>
-                <strong>IMDb Rating:</strong> {details?.imdbRating || "N/A"}
+                <strong>Starring:</strong> {details?.leadActor || "N/A"}
+              </p>
+              <p>
+                <strong>IMDb:</strong> {details?.imdbRating || "N/A"}
               </p>
             </div>
           </div>

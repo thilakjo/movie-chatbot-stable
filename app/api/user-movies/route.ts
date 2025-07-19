@@ -1,4 +1,4 @@
-// app/api/user-movies/route.ts (Upgraded)
+// app/api/user-movies/route.ts (Upgraded to save Lead Actor)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -8,10 +8,8 @@ import { NextResponse } from "next/server";
 const prisma = new PrismaClient();
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-// Helper function to fetch full movie details
 async function getMovieDetails(title: string) {
   if (!TMDB_API_KEY) return {};
-  // This reuses the logic from our tmdb api route
   try {
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
       title
@@ -42,8 +40,8 @@ async function getMovieDetails(title: string) {
         ? detailsData.vote_average.toFixed(1)
         : null,
       director:
-        creditsData.crew?.find((person: any) => person.job === "Director")
-          ?.name || null,
+        creditsData.crew?.find((p: any) => p.job === "Director")?.name || null,
+      leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch {
     return {};
@@ -53,32 +51,29 @@ async function getMovieDetails(title: string) {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
-  if (!userId) {
+  if (!userId)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
-  try {
-    const { movieTitle, status, feedback } = await req.json();
-
-    // Fetch details from TMDb before saving
-    const details = await getMovieDetails(movieTitle);
-
-    await prisma.userMovie.upsert({
+  const { movieTitle, status, feedback } = await req.json();
+  if (status === "REMOVED") {
+    await prisma.userMovie.delete({
       where: { userId_movieTitle: { userId, movieTitle } },
-      update: { status, feedback: feedback || undefined, ...details },
-      create: {
-        userId,
-        movieTitle,
-        status,
-        feedback: feedback || undefined,
-        ...details,
-      },
     });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to update movie status" },
-      { status: 500 }
-    );
   }
+
+  const details = await getMovieDetails(movieTitle);
+
+  await prisma.userMovie.upsert({
+    where: { userId_movieTitle: { userId, movieTitle } },
+    update: { status, feedback: feedback || undefined, ...details },
+    create: {
+      userId,
+      movieTitle,
+      status,
+      feedback: feedback || undefined,
+      ...details,
+    },
+  });
+  return NextResponse.json({ success: true });
 }
