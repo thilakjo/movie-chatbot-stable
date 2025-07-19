@@ -21,7 +21,7 @@ interface Movie {
   id: string;
   movieTitle: string;
   status: string;
-  order?: number;
+  posterUrl?: string | null;
 }
 interface Recommendation {
   title: string;
@@ -34,6 +34,7 @@ const FEEDBACK_QUESTIONS = [
   },
   { q: "Would you recommend this?", o: ["Yes", "Maybe", "No"] },
 ];
+const ITEMS_PER_PAGE = 8;
 
 export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
   const [movies, setMovies] = useState(initialMovies);
@@ -44,26 +45,19 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
   );
   const [feedback, setFeedback] = useState<{ q: string; a: string }[]>([]);
   const [feedbackStep, setFeedbackStep] = useState(0);
+  const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
 
   const fetchAllData = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
       const data = await res.json();
-      setMovies(
-        data.userMovies.sort(
-          (a: Movie, b: Movie) => (a.order ?? 0) - (b.order ?? 0)
-        ) || []
-      );
+      setMovies(data.userMovies || []);
       setRecommendations(data.recommendations || []);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchAllData();
-  }, []);
 
   const handleListAction = async (
     title: string,
@@ -80,9 +74,16 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
         feedback: feedbackPayload,
       }),
     });
-    if (status !== "DISMISSED") {
-      fetchAllData();
-    }
+    if (status !== "DISMISSED") fetchAllData();
+  };
+
+  const handleRemove = async (movieTitle: string) => {
+    setMovies((prev) => prev.filter((m) => m.movieTitle !== movieTitle));
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieTitle, status: "REMOVED" }),
+    });
   };
 
   const handleMarkAsWatched = (rec: Recommendation) => {
@@ -95,7 +96,6 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
     const currentQuestion = FEEDBACK_QUESTIONS[feedbackStep];
     const newFeedback = [...feedback, { q: currentQuestion.q, a: answer }];
     setFeedback(newFeedback);
-
     if (feedbackStep < FEEDBACK_QUESTIONS.length - 1) {
       setFeedbackStep(feedbackStep + 1);
     } else {
@@ -109,15 +109,12 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
 
   return (
     <div className="max-w-7xl mx-auto animate-fadeIn pb-24">
-      <h1 className="text-4xl font-bold mb-8 text-center">
-        Your Movie Dashboard
-      </h1>
-
-      {loading && !recommendations.length && (
-        <p className="text-center text-gray-500 my-8">
-          Finding your first recommendations...
-        </p>
-      )}
+      <div className="text-center mb-8 flex flex-col md:flex-row justify-center items-center gap-4">
+        <h1 className="text-4xl font-bold">Your Movie Dashboard</h1>
+        <Button onClick={fetchAllData} disabled={loading}>
+          {loading ? "Finding..." : "Get New Recommendations"}
+        </Button>
+      </div>
 
       {recommendations.length > 0 && (
         <div className="mb-12">
@@ -132,28 +129,40 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
                   <MovieCard title={rec.title}>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex flex-col gap-2 p-2">
+                    <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
-                        onClick={() => handleListAction(rec.title, "WATCHLIST")}
-                        size="sm"
-                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleListAction(rec.title, "WATCHLIST");
+                        }}
+                        size="icon"
+                        className="bg-green-600 hover:bg-green-700 h-8 w-8"
                       >
-                        Watchlist
+                        {" "}
+                        L{" "}
                       </Button>
                       <Button
-                        onClick={() => handleMarkAsWatched(rec)}
-                        size="sm"
-                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsWatched(rec);
+                        }}
+                        size="icon"
+                        className="h-8 w-8"
                       >
-                        Watched
+                        {" "}
+                        W{" "}
                       </Button>
                       <Button
-                        onClick={() => handleListAction(rec.title, "DISMISSED")}
-                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleListAction(rec.title, "DISMISSED");
+                        }}
+                        size="icon"
                         variant="ghost"
-                        className="w-full"
+                        className="h-8 w-8"
                       >
-                        Dismiss
+                        {" "}
+                        X{" "}
                       </Button>
                     </div>
                   </MovieCard>
@@ -177,40 +186,58 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
         </TabsList>
         <TabsContent value="watchlist" className="mt-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-            {watchlist.map((movie) => (
-              <MovieCard key={movie.id} title={movie.movieTitle} />
+            {(showAll.watchlist
+              ? watchlist
+              : watchlist.slice(0, ITEMS_PER_PAGE)
+            ).map((movie) => (
+              <MovieCard
+                key={movie.id}
+                title={movie.movieTitle}
+                initialPoster={movie.posterUrl || undefined}
+                onRemove={() => handleRemove(movie.movieTitle)}
+              />
             ))}
           </div>
+          {watchlist.length > ITEMS_PER_PAGE && (
+            <Button
+              variant="link"
+              onClick={() =>
+                setShowAll((p) => ({ ...p, watchlist: !p.watchlist }))
+              }
+              className="mt-4"
+            >
+              {showAll.watchlist
+                ? "Show Less"
+                : `Show ${watchlist.length - ITEMS_PER_PAGE} More`}
+            </Button>
+          )}
         </TabsContent>
         <TabsContent value="watched" className="mt-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-            {watched.map((movie) => (
-              <MovieCard key={movie.id} title={movie.movieTitle} />
-            ))}
+            {(showAll.watched ? watched : watched.slice(0, ITEMS_PER_PAGE)).map(
+              (movie) => (
+                <MovieCard
+                  key={movie.id}
+                  title={movie.movieTitle}
+                  initialPoster={movie.posterUrl || undefined}
+                  onRemove={() => handleRemove(movie.movieTitle)}
+                />
+              )
+            )}
           </div>
+          {watched.length > ITEMS_PER_PAGE && (
+            <Button
+              variant="link"
+              onClick={() => setShowAll((p) => ({ ...p, watched: !p.watched }))}
+              className="mt-4"
+            >
+              {showAll.watched
+                ? "Show Less"
+                : `Show ${watched.length - ITEMS_PER_PAGE} More`}
+            </Button>
+          )}
         </TabsContent>
       </Tabs>
-
-      <Button
-        onClick={fetchAllData}
-        disabled={loading}
-        className="fixed bottom-6 right-6 z-50 h-16 w-16 rounded-full shadow-2xl"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className={`w-8 h-8 ${loading ? "animate-spin" : ""}`}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M16.023 9.348h4.992v-.001a.75.75 0 0 1 .588.821a12.025 12.025 0 0 1-2.087 7.233a12.026 12.026 0 0 1-7.233 2.087a.75.75 0 0 1-.821-.588v-.001h4.992a.75.75 0 0 0 0-1.5H9.75a.75.75 0 0 1-.75-.75V3.75a.75.75 0 0 1 1.5 0v2.254a12.023 12.023 0 0 1 6.273-1.658Z"
-          />
-        </svg>
-      </Button>
 
       <Dialog
         open={!!feedbackMovie}
