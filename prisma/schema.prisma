@@ -32,6 +32,8 @@ model UserMovie {
   status     String // Can be "WATCHLIST" or "WATCHED"
   rating     Int?     // User's rating after watching (e.g., 1-5)
   feedback   Json?    // For storing answers to follow-up questions
+  order      Int      @default(0) // For drag-to-reorder
+  genres     String[] @default([]) // For genre tags
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

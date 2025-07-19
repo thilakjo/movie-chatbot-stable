@@ -34,12 +34,30 @@ export default async function Home() {
     );
   }
 
+  // Fetch user with movies
   const user = await prisma.user.findUnique({
     where: { id: (session.user as any).id },
     include: { movies: true },
   });
 
   const isOnboardingComplete = user?.onboardingStep === "ONBOARDING_COMPLETE";
+
+  // If onboarding complete, fetch userMovies with posters from the recommend API
+  let moviesWithPosters = user?.movies ?? [];
+  if (isOnboardingComplete) {
+    try {
+      const res = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        }/api/recommend`,
+        { method: "POST", headers: { Cookie: "" } }
+      );
+      const data = await res.json();
+      if (data.userMovies) {
+        moviesWithPosters = data.userMovies;
+      }
+    } catch {}
+  }
 
   return (
     <main className="p-4 md:p-8">
@@ -50,7 +68,7 @@ export default async function Home() {
         <SignOutButton />
       </div>
       {isOnboardingComplete ? (
-        <Dashboard movies={user?.movies ?? []} />
+        <Dashboard movies={moviesWithPosters} />
       ) : (
         <OnboardingFlow step={user?.onboardingStep} />
       )}
