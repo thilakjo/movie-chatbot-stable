@@ -1,20 +1,26 @@
-// components/Dashboard.tsx (Final Version)
-
 "use client";
 import { useState, useEffect } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination, A11y } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
-import { MovieCard } from "./MovieCard"; // Import our new component
+import { MovieCard } from "./MovieCard";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Movie {
   id: string;
   movieTitle: string;
-  status: string; // Changed from "WATCHLIST" | "WATCHED" to string
-  posterUrl?: string;
-  order?: number;
+  status: "WATCHLIST" | "WATCHED";
 }
 interface Recommendation {
   title: string;
@@ -38,23 +44,26 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
   const [feedback, setFeedback] = useState<{ q: string; a: string }[]>([]);
   const [feedbackStep, setFeedbackStep] = useState(0);
 
-  const fetchRecommendations = async () => {
+  const fetchAllData = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
       const data = await res.json();
+      setMovies(data.userMovies || []);
       setRecommendations(data.recommendations || []);
-      setMovies(data.userMovies || []); // Also update existing lists
-    } catch (error) {
-      console.error("Failed to fetch recommendations:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch initial data on load
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
   const handleListAction = async (
     title: string,
-    status: "WATCHLIST" | "WATCHED",
+    status: "WATCHLIST" | "WATCHED" | "DISMISSED",
     feedbackPayload?: any
   ) => {
     setRecommendations((prev) => prev.filter((m) => m.title !== title));
@@ -67,7 +76,9 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
         feedback: feedbackPayload,
       }),
     });
-    fetchRecommendations();
+    if (status !== "DISMISSED") {
+      fetchAllData(); // Refresh lists if movie was added
+    }
   };
 
   const handleMarkAsWatched = (rec: Recommendation) => {
@@ -80,6 +91,7 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
     const currentQuestion = FEEDBACK_QUESTIONS[feedbackStep];
     const newFeedback = [...feedback, { q: currentQuestion.q, a: answer }];
     setFeedback(newFeedback);
+
     if (feedbackStep < FEEDBACK_QUESTIONS.length - 1) {
       setFeedbackStep(feedbackStep + 1);
     } else {
@@ -93,111 +105,131 @@ export function Dashboard({ initialMovies }: { initialMovies: Movie[] }) {
 
   return (
     <div className="max-w-7xl mx-auto animate-fadeIn pb-24">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4">Your Movie Dashboard</h1>
-      </div>
-
-      {loading && (
-        <p className="text-center text-gray-500 my-8">
-          Finding your recommendations...
-        </p>
-      )}
+      <h1 className="text-4xl font-bold mb-8 text-center">
+        Your Movie Dashboard
+      </h1>
 
       {recommendations.length > 0 && (
-        <div className="mb-16">
+        <div className="mb-12">
           <h2 className="text-3xl font-bold mb-6 text-center">
             Recommended For You
           </h2>
-          <Swiper
-            modules={[Navigation, Pagination, A11y]}
-            spaceBetween={20}
-            slidesPerView={2}
-            navigation
-            pagination={{ clickable: true }}
-            breakpoints={{
-              640: { slidesPerView: 3 },
-              768: { slidesPerView: 4 },
-              1024: { slidesPerView: 5 },
-            }}
-          >
-            {recommendations.map((rec) => (
-              <SwiperSlide key={rec.title} className="pb-12">
-                <MovieCard title={rec.title}>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => handleListAction(rec.title, "WATCHLIST")}
-                      className="flex-1 text-xs bg-green-500 text-white py-2 px-2 rounded hover:bg-green-600 transition-colors"
-                    >
-                      Watchlist
-                    </button>
-                    <button
-                      onClick={() => handleMarkAsWatched(rec)}
-                      className="flex-1 text-xs bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition-colors"
-                    >
-                      Watched
-                    </button>
-                  </div>
-                </MovieCard>
-              </SwiperSlide>
-            ))}
-          </Swiper>
+          <Carousel className="w-full" opts={{ align: "start", loop: true }}>
+            <CarouselContent className="-ml-4">
+              {recommendations.map((rec) => (
+                <CarouselItem
+                  key={rec.title}
+                  className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
+                >
+                  <MovieCard title={rec.title}>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex flex-col gap-2 p-2">
+                      <Button
+                        onClick={() => handleListAction(rec.title, "WATCHLIST")}
+                        size="sm"
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        Watchlist
+                      </Button>
+                      <Button
+                        onClick={() => handleMarkAsWatched(rec)}
+                        size="sm"
+                        className="w-full"
+                      >
+                        Watched
+                      </Button>
+                      <Button
+                        onClick={() => handleListAction(rec.title, "DISMISSED")}
+                        size="sm"
+                        variant="ghost"
+                        className="w-full"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </MovieCard>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="ml-16" />
+            <CarouselNext className="mr-16" />
+          </Carousel>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        <section>
-          <h2 className="text-2xl font-bold mb-4">
+      <Tabs defaultValue="watchlist" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="watchlist">
             My Watchlist ({watchlist.length})
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          </TabsTrigger>
+          <TabsTrigger value="watched">
+            Watched Movies ({watched.length})
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="watchlist" className="mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
             {watchlist.map((movie) => (
               <MovieCard key={movie.id} title={movie.movieTitle} />
             ))}
           </div>
-        </section>
-        <section>
-          <h2 className="text-2xl font-bold mb-4">
-            Watched Movies ({watched.length})
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        </TabsContent>
+        <TabsContent value="watched" className="mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
             {watched.map((movie) => (
               <MovieCard key={movie.id} title={movie.movieTitle} />
             ))}
           </div>
-        </section>
-      </div>
+        </TabsContent>
+      </Tabs>
 
-      <button
-        onClick={fetchRecommendations}
+      <Button
+        onClick={fetchAllData}
         disabled={loading}
-        className="fixed bottom-6 right-6 z-50 px-5 py-3 bg-primary text-white rounded-full shadow-2xl hover:bg-primary-hover font-semibold flex items-center gap-2 transition-transform duration-300 active:scale-95"
+        className="fixed bottom-6 right-6 z-50 h-16 w-16 rounded-full shadow-2xl"
       >
-        <span>{loading ? "Finding..." : "Get New Recommendations"}</span>
-      </button>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className={`w-8 h-8 ${loading ? "animate-spin" : ""}`}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.023 9.348h4.992v-.001a.75.75 0 0 1 .588.821a12.025 12.025 0 0 1-2.087 7.233a12.026 12.026 0 0 1-7.233 2.087a.75.75 0 0 1-.821-.588v-.001h4.992a.75.75 0 0 0 0-1.5H9.75a.75.75 0 0 1-.75-.75V3.75a.75.75 0 0 1 1.5 0v2.254a12.023 12.023 0 0 1 6.273-1.658Z"
+          />
+        </svg>
+      </Button>
 
-      {feedbackMovie && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl text-gray-900">
-            <h3 className="text-lg font-bold mb-2 text-center">
-              Feedback for {feedbackMovie.title}
-            </h3>
-            <p className="mb-4 font-semibold text-center">
+      <Dialog
+        open={!!feedbackMovie}
+        onOpenChange={(isOpen) => !isOpen && setFeedbackMovie(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-center mb-4">
+              Feedback for {feedbackMovie?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center">
+            <p className="mb-4 font-semibold">
               {FEEDBACK_QUESTIONS[feedbackStep].q}
             </p>
             <div className="flex flex-col gap-2">
               {FEEDBACK_QUESTIONS[feedbackStep].o.map((opt) => (
-                <button
+                <Button
                   key={opt}
+                  variant="outline"
                   onClick={() => handleFeedbackAnswer(opt)}
-                  className="w-full text-center p-2 rounded bg-gray-100 hover:bg-primary hover:text-white transition-colors"
                 >
                   {opt}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

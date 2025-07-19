@@ -1,6 +1,16 @@
 "use client";
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function Survey() {
   const [favoriteGenre, setFavoriteGenre] = useState("");
@@ -17,76 +27,56 @@ export function Survey() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ favoriteGenre, favoriteDirector, mood }),
     });
-    setIsLoading(false);
     router.refresh();
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Tell us your taste!</h2>
-      <p className="mb-6 text-gray-600">
-        This helps us give better recommendations.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label
-            htmlFor="genre"
-            className="block text-gray-700 font-semibold mb-2"
-          >
-            Favorite Genre?
-          </label>
-          <input
-            type="text"
-            id="genre"
-            value={favoriteGenre}
-            onChange={(e) => setFavoriteGenre(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g., Sci-Fi, Comedy"
-            required
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="director"
-            className="block text-gray-700 font-semibold mb-2"
-          >
-            Favorite Director?
-          </label>
-          <input
-            type="text"
-            id="director"
-            value={favoriteDirector}
-            onChange={(e) => setFavoriteDirector(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g., Christopher Nolan"
-            required
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="mood"
-            className="block text-gray-700 font-semibold mb-2"
-          >
-            What is your current mood for a movie?
-          </label>
-          <input
-            type="text"
-            id="mood"
-            value={mood}
-            onChange={(e) => setMood(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g., Something funny"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-        >
-          {isLoading ? "Saving..." : "Save Preferences"}
-        </button>
-      </form>
-    </div>
+    <Card className="max-w-lg mx-auto animate-fadeIn">
+      <CardHeader>
+        <CardTitle className="text-2xl">Tell us your taste!</CardTitle>
+        <CardDescription>
+          This helps us give you better recommendations.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="genre">Favorite Genre?</Label>
+            <Input
+              id="genre"
+              placeholder="e.g., Sci-Fi, Comedy"
+              value={favoriteGenre}
+              onChange={(e) => setFavoriteGenre(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="director">Favorite Director?</Label>
+            <Input
+              id="director"
+              placeholder="e.g., Christopher Nolan"
+              value={favoriteDirector}
+              onChange={(e) => setFavoriteDirector(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mood">
+              What&apos;s your current mood for a movie?
+            </Label>
+            <Input
+              id="mood"
+              placeholder="e.g., Something funny and lighthearted"
+              value={mood}
+              onChange={(e) => setMood(e.target.value)}
+              required
+            />
+          </div>
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? "Saving..." : "Save Preferences"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
