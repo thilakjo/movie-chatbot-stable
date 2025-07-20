@@ -98,7 +98,15 @@ export async function POST() {
   if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
+  interface UserMovie {
+    id: string;
+    movieTitle: string;
+    // Add other fields from your Prisma user.movies model if needed
+  }
+
+  const excludeTitles: Set<string> = new Set(
+    user.movies.map((m: UserMovie) => m.movieTitle)
+  );
   if (user.movieRatings) {
     Object.keys(user.movieRatings).forEach((title) => excludeTitles.add(title));
   }
@@ -121,7 +129,6 @@ export async function POST() {
     const result = await model.generateContent(prompt);
     rawResponse = result.response.text();
 
-    // A more robust way to find and parse the JSON block
     const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
     if (!jsonMatch) {
       throw new Error("No valid JSON array found in the AI response.");
@@ -133,10 +140,9 @@ export async function POST() {
       throw new Error("AI returned empty or invalid data.");
     }
   } catch (e) {
-    // This new log is crucial for debugging
     console.error("--- GEMINI RECOMMENDATION ERROR ---");
     console.error("Failed to get or parse recommendations from Gemini.");
-    console.error("Raw AI Response:", rawResponse); // Log the exact response
+    console.error("Raw AI Response:", rawResponse);
     console.error("Parsing Error:", e);
     console.error("---------------------------------");
     return NextResponse.json(
@@ -153,9 +159,28 @@ export async function POST() {
       getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
     )
   );
-  const userMoviesWithDetails = await Promise.all(
-    user.movies.map((movie) =>
-      getMovieDetails(movie.movieTitle).then((details) => ({
+  interface MovieDetails {
+    posterUrl: string;
+    year: number | null;
+    director: string | null;
+    imdbRating: string | null;
+    leadActor: string | null;
+    title?: string;
+  }
+
+  interface Recommendation {
+    title: string;
+  }
+
+  interface UserMovie {
+    id: string;
+    movieTitle: string;
+    // Add other fields from your Prisma user.movies model if needed
+  }
+
+  const userMoviesWithDetails: (UserMovie & MovieDetails)[] = await Promise.all(
+    user.movies.map((movie: UserMovie) =>
+      getMovieDetails(movie.movieTitle).then((details: MovieDetails) => ({
         ...movie,
         ...details,
       }))

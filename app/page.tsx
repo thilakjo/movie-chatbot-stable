@@ -33,8 +33,8 @@ export default async function Home() {
 
   if (!session?.user) {
     return (
-      <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="p-8 bg-white rounded-lg shadow-md text-center">
+      <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900">
+        <div className="p-8 bg-white dark:bg-slate-800 rounded-lg shadow-md text-center">
           <h1 className="text-2xl font-bold mb-4">AI Movie Recommender</h1>
           <SignInButton />
         </div>

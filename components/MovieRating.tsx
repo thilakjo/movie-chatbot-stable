@@ -35,13 +35,14 @@ export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
     router.refresh();
   };
 
-  // If for some reason the dynamic list is empty, show a loading/error state.
   if (!moviesToRate || moviesToRate.length === 0) {
     return (
       <Card className="max-w-2xl mx-auto animate-fadeIn">
         <CardHeader>
-          <CardTitle>Generating Your Movie List...</CardTitle>
-          <CardDescription>Please wait a moment.</CardDescription>
+          <CardTitle>Generating Your Personalized Movie List...</CardTitle>
+          <CardDescription>
+            Please wait a moment, this can take a few seconds.
+          </CardDescription>
         </CardHeader>
       </Card>
     );
