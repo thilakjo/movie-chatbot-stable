@@ -375,55 +375,53 @@ export function Dashboard({
                         {rec.explanation}
                       </div>
                     )}
-                    {/* Like Button */}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleListAction(rec.title, "LIKED"); // Save as like (implement in backend)
-                      }}
-                      size="sm"
-                      variant="outline"
-                      className="w-full text-xs h-7 flex items-center justify-center gap-1"
-                    >
-                      <span role="img" aria-label="Like">
-                        ❤️
-                      </span>{" "}
-                      Like
-                    </Button>
-                    {/* Add to Watchlist */}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleListAction(rec.title, "WATCHLIST");
-                      }}
-                      size="sm"
-                      className="w-full text-xs h-7"
-                    >
-                      Watchlist
-                    </Button>
-                    {/* Mark as Watched */}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMarkRecommendationAsWatched(rec);
-                      }}
-                      size="sm"
-                      className="w-full text-xs h-7"
-                    >
-                      Watched
-                    </Button>
-                    {/* Dismiss */}
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleListAction(rec.title, "DISMISSED");
-                      }}
-                      size="sm"
-                      variant="outline"
-                      className="w-full text-xs h-7 bg-black/50 border-white/50 text-white hover:bg-black/70"
-                    >
-                      Dismiss
-                    </Button>
+                    <div className="flex flex-col gap-2 w-full sm:flex-row sm:gap-1 mt-2">
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleListAction(rec.title, "LIKED");
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs h-9 flex items-center justify-center gap-1"
+                      >
+                        <span role="img" aria-label="Like">
+                          ❤️
+                        </span>{" "}
+                        Like
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleListAction(rec.title, "WATCHLIST");
+                        }}
+                        size="sm"
+                        className="w-full text-xs h-9"
+                      >
+                        Watchlist
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkRecommendationAsWatched(rec);
+                        }}
+                        size="sm"
+                        className="w-full text-xs h-9"
+                      >
+                        Watched
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleListAction(rec.title, "DISMISSED");
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs h-9 bg-black/50 border-white/50 text-white hover:bg-black/70"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
                   </MovieCard>
                 </CarouselItem>
               ))}

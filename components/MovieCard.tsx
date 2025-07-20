@@ -75,7 +75,7 @@ export function MovieCard({
             <h3 className="text-white text-sm font-bold truncate">{title}</h3>
           </div>
           {children && (
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 gap-2">
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-2 gap-2 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity opacity-100">
               {children}
             </div>
           )}

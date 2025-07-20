@@ -24,7 +24,12 @@ export async function POST(req: Request) {
     - Favorite Genre: ${favoriteGenre}
     - Favorite Director: ${favoriteDirector}
     - Mood: ${mood}
-    - Additional preferences: ${casualAnswers?.join(", ")}
+    - Vibe check answers:
+      ${
+        Array.isArray(casualAnswers) && casualAnswers.length > 0
+          ? casualAnswers.map((a, i) => `Q${i + 1}: ${a}`).join("\n      ")
+          : "None"
+      }
     Return ONLY a valid JSON array of movie titles. Example: ["The Shawshank Redemption", "Pulp Fiction"]`;
 
     let movies: string[] = [];
