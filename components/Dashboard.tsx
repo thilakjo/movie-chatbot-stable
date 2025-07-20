@@ -45,11 +45,12 @@ export function Dashboard({
   const [feedbackStep, setFeedbackStep] = useState(0);
   const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
 
-  // This function now handles errors gracefully
+  // This function now handles errors gracefully and preserves existing movies
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
-    setRecommendations([]); // Clear old recommendations
+    setRecommendations([]); // Clear old recommendations only
+
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
       const data = await res.json();
@@ -62,8 +63,18 @@ export function Dashboard({
       if (data.error) {
         setError(data.error);
         setRecommendations([]);
-        setMovies(data.userMovies || []);
+        // Don't update movies if there's an error - preserve existing ones
+        // Only update if we have new user movies data
+        if (data.userMovies && data.userMovies.length > 0) {
+          setMovies(
+            data.userMovies.sort(
+              (a: MovieWithDetails, b: MovieWithDetails) =>
+                (a.order ?? 0) - (b.order ?? 0)
+            )
+          );
+        }
       } else {
+        // Success case - update both recommendations and movies
         setMovies(
           data.userMovies.sort(
             (a: MovieWithDetails, b: MovieWithDetails) =>
@@ -77,6 +88,7 @@ export function Dashboard({
       setError(
         error.message || "Failed to get recommendations. Please try again."
       );
+      // Don't clear existing movies on error - preserve them
     } finally {
       setLoading(false);
     }

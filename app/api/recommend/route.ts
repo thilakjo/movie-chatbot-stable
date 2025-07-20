@@ -141,6 +141,24 @@ export async function POST() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Always get user's existing movies with details first
+    const userMoviesWithDetails = await Promise.allSettled(
+      user.movies.map((movie) =>
+        getMovieDetails(movie.movieTitle).then((details) => ({
+          ...movie,
+          ...details,
+        }))
+      )
+    );
+
+    const successfulUserMovies = userMoviesWithDetails
+      .filter(
+        (result): result is PromiseFulfilledResult<any> =>
+          result.status === "fulfilled"
+      )
+      .map((result) => result.value)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
     const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
     if (user.movieRatings) {
       Object.keys(user.movieRatings).forEach((title) =>
@@ -194,7 +212,7 @@ export async function POST() {
       console.error("Gemini AI is not available - API key missing");
       return NextResponse.json({
         recommendations: [],
-        userMovies: [],
+        userMovies: successfulUserMovies,
         error: "AI service is currently unavailable. Please try again later.",
       });
     }
@@ -275,10 +293,10 @@ export async function POST() {
         }
       } catch (fallbackError) {
         console.error("Fallback recommendation also failed:", fallbackError);
-        // Return a fallback response instead of an error
+        // Return user's existing movies even when AI fails
         return NextResponse.json({
           recommendations: [],
-          userMovies: [],
+          userMovies: successfulUserMovies,
           error:
             "Unable to generate recommendations at this time. Please try again later.",
         });
@@ -298,23 +316,6 @@ export async function POST() {
           result.status === "fulfilled"
       )
       .map((result) => result.value);
-
-    const userMoviesWithDetails = await Promise.allSettled(
-      user.movies.map((movie) =>
-        getMovieDetails(movie.movieTitle).then((details) => ({
-          ...movie,
-          ...details,
-        }))
-      )
-    );
-
-    const successfulUserMovies = userMoviesWithDetails
-      .filter(
-        (result): result is PromiseFulfilledResult<any> =>
-          result.status === "fulfilled"
-      )
-      .map((result) => result.value)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     console.log("Returning successful recommendations:", successfulRecs.length);
 
