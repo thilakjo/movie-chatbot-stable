@@ -216,6 +216,7 @@ export function Dashboard({
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [modalRec, setModalRec] = useState<Recommendation | null>(null);
   const [likedRecs, setLikedRecs] = useState<Set<string>>(new Set());
+  const [justLiked, setJustLiked] = useState<string | null>(null);
 
   // This function now handles errors gracefully and preserves existing movies
   const fetchAllData = async () => {
@@ -341,6 +342,10 @@ export function Dashboard({
     handleListAction(title, "LIKED");
     // Optionally, also mark as watched
     handleListAction(title, "WATCHED");
+    setJustLiked(title);
+    setTimeout(() => {
+      setJustLiked((curr) => (curr === title ? null : curr));
+    }, 800);
   };
 
   const watchlist = movies.filter((m) => m.status === "WATCHLIST");
@@ -392,9 +397,9 @@ export function Dashboard({
                       className="cursor-pointer relative"
                     >
                       <MovieCard title={rec.title} initialData={rec as any} />
-                      {/* Heart animation overlay if liked */}
+                      {/* Heart animation overlay if just liked */}
                       <AnimatePresence>
-                        {likedRecs.has(rec.title) && (
+                        {justLiked === rec.title && (
                           <motion.div
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1.3, opacity: 1 }}
@@ -508,9 +513,9 @@ export function Dashboard({
                           </CardContent>
                         </Card>
                       </MovieCard>
-                      {/* Heart animation overlay if liked */}
+                      {/* Heart animation overlay if just liked */}
                       <AnimatePresence>
-                        {likedRecs.has(rec.title) && (
+                        {justLiked === rec.title && (
                           <motion.div
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1.3, opacity: 1 }}
