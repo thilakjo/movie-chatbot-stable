@@ -36,7 +36,7 @@ export function Dashboard({
 }) {
   const [movies, setMovies] = useState(initialMovies);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Set to false initially
   const [feedbackMovie, setFeedbackMovie] = useState<Recommendation | null>(
     null
   );
@@ -44,10 +44,16 @@ export function Dashboard({
   const [feedbackStep, setFeedbackStep] = useState(0);
   const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
 
+  // This function now handles errors gracefully
   const fetchAllData = async () => {
     setLoading(true);
+    setRecommendations([]); // Clear old recommendations
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to fetch recommendations.");
+      }
       const data = await res.json();
       setMovies(
         data.userMovies.sort(
@@ -56,14 +62,16 @@ export function Dashboard({
         ) || []
       );
       setRecommendations(data.recommendations || []);
+    } catch (error: any) {
+      // Show an alert to the user if something goes wrong
+      alert(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAllData();
-  }, []);
+  // We don't need to fetch on initial load anymore, let the user decide.
+  // useEffect(() => { fetchAllData(); }, []);
 
   const handleListAction = async (
     title: string,
@@ -80,7 +88,12 @@ export function Dashboard({
         feedback: feedbackPayload,
       }),
     });
-    if (status !== "DISMISSED") fetchAllData();
+    if (status !== "DISMISSED") {
+      // Just refresh the user's lists without getting new recommendations
+      const res = await fetch("/api/user-movies");
+      const data = await res.json();
+      setMovies(data.movies || []);
+    }
   };
 
   const handleMarkAsWatched = (rec: Recommendation) => {
@@ -139,7 +152,7 @@ export function Dashboard({
                   key={rec.title}
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
-                  <MovieCard title={rec.title}>
+                  <MovieCard title={rec.title} initialData={rec as any}>
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();

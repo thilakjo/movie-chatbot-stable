@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts
+// app/api/recommend/route.ts (Final, Robust Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -24,7 +24,12 @@ async function getMovieDetails(title: string) {
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
       title
     )}`;
-    const searchRes = await fetch(searchUrl);
+    const searchRes = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(5000),
+    }); // 5 second timeout
+    if (!searchRes.ok)
+      throw new Error(`TMDb search failed with status: ${searchRes.status}`);
+
     const searchData = await searchRes.json();
     if (!searchData.results || searchData.results.length === 0)
       return {
@@ -41,8 +46,8 @@ async function getMovieDetails(title: string) {
     const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
 
     const [detailsRes, creditsRes] = await Promise.all([
-      fetch(detailsUrl),
-      fetch(creditsUrl),
+      fetch(detailsUrl, { signal: AbortSignal.timeout(5000) }),
+      fetch(creditsUrl, { signal: AbortSignal.timeout(5000) }),
     ]);
     const detailsData = await detailsRes.json();
     const creditsData = await creditsRes.json();
@@ -63,12 +68,14 @@ async function getMovieDetails(title: string) {
     };
   } catch (error) {
     console.error(`TMDb fetch failed for "${title}":`, error);
+    // Return fallback data but don't crash the whole process
     return {
       posterUrl: FALLBACK_POSTER,
       year: null,
       director: null,
       imdbRating: null,
       leadActor: null,
+      title,
     };
   }
 }
@@ -86,16 +93,7 @@ export async function POST() {
   if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  interface UserMovie {
-    id: string;
-    userId: string;
-    movieTitle: string;
-    // Add other fields from your Prisma schema if needed
-  }
-
-  const excludeTitles: Set<string> = new Set(
-    (user.movies as UserMovie[]).map((m: UserMovie) => m.movieTitle)
-  );
+  const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
   if (user.movieRatings) {
     Object.keys(user.movieRatings).forEach((title) => excludeTitles.add(title));
   }
@@ -110,19 +108,23 @@ export async function POST() {
     ", "
   )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a JSON array of objects, with a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
   let recommendations: { title: string }[] = [];
   try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
     const cleanedText = result.response
       .text()
       .replace(/```json|```/g, "")
       .trim();
     recommendations = JSON.parse(cleanedText);
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      throw new Error("AI returned invalid data");
+    }
   } catch (e) {
-    console.error(
-      "Failed to parse Gemini recommendations:",
-      result.response.text()
+    console.error("Failed to get valid recommendations from Gemini:", e);
+    return NextResponse.json(
+      { error: "Could not get recommendations from the AI. Please try again." },
+      { status: 500 }
     );
   }
 
@@ -131,30 +133,9 @@ export async function POST() {
       getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
     )
   );
-  interface MovieDetails {
-    posterUrl: string;
-    year: number | null;
-    director: string | null;
-    imdbRating: string | null;
-    leadActor: string | null;
-  }
-
-  interface Recommendation {
-    title: string;
-  }
-
-  interface UserMovie {
-    id: string;
-    userId: string;
-    movieTitle: string;
-    // Add other fields from your Prisma schema if needed
-  }
-
-  type UserMovieWithDetails = UserMovie & MovieDetails;
-
-  const userMoviesWithDetails: UserMovieWithDetails[] = await Promise.all(
-    user.movies.map((movie: UserMovie) =>
-      getMovieDetails(movie.movieTitle).then((details: MovieDetails) => ({
+  const userMoviesWithDetails = await Promise.all(
+    user.movies.map((movie) =>
+      getMovieDetails(movie.movieTitle).then((details) => ({
         ...movie,
         ...details,
       }))
