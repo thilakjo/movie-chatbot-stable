@@ -37,7 +37,7 @@ const OnboardingFlow = ({ user }: { user: any }) => {
           watched={watched}
           onRefresh={() => {
             // This will be handled by the client component
-            window.location.reload();
+            // The Dashboard component will handle its own refresh logic
           }}
         />
       );
