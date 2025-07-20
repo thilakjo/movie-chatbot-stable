@@ -1,6 +1,11 @@
 "use client";
 import { useState, useRef } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bookmark, Eye, Search as SearchIcon, Loader2 } from "lucide-react";
@@ -102,6 +107,14 @@ export function MovieSearchModal({
             {loading && (
               <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
             )}
+          </div>
+          {/* Accessibility: Add DialogTitle and DialogDescription */}
+          <div className="sr-only">
+            <DialogTitle>Search Movies</DialogTitle>
+            <DialogDescription>
+              Type to search for movies and add them to your watchlist or mark
+              as watched.
+            </DialogDescription>
           </div>
           {suggestions.length > 0 && (
             <div className="divide-y rounded-lg border bg-white dark:bg-gray-800 shadow-lg max-h-96 overflow-y-auto">
