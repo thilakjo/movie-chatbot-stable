@@ -1,4 +1,4 @@
-// app/api/survey/route.ts (3-Tier Fallback System with Personalized Fallbacks)
+// app/api/survey/route.ts (3-Tier Fallback System)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -16,191 +16,19 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
-// Personalized fallback movies based on genre and preferences
-const PERSONALIZED_FALLBACK_MOVIES = {
-  romance: [
-    "La La Land",
-    "The Notebook",
-    "500 Days of Summer",
-    "Eternal Sunshine of the Spotless Mind",
-    "Before Sunrise",
-    "Crazy Rich Asians",
-    "The Proposal",
-    "Notting Hill",
-    "When Harry Met Sally",
-    "Pretty Woman",
-    "Sleepless in Seattle",
-    "You've Got Mail",
-  ],
-  action: [
-    "Mad Max: Fury Road",
-    "John Wick",
-    "The Dark Knight",
-    "Mission: Impossible - Fallout",
-    "Die Hard",
-    "The Matrix",
-    "Gladiator",
-    "Braveheart",
-    "The Avengers",
-    "Black Panther",
-    "Wonder Woman",
-    "Captain America: The Winter Soldier",
-  ],
-  comedy: [
-    "The Grand Budapest Hotel",
-    "Superbad",
-    "Shaun of the Dead",
-    "The Big Lebowski",
-    "Groundhog Day",
-    "Bridesmaids",
-    "The Hangover",
-    "21 Jump Street",
-    "Deadpool",
-    "Guardians of the Galaxy",
-    "The Lego Movie",
-    "Zootopia",
-  ],
-  drama: [
-    "The Shawshank Redemption",
-    "Forrest Gump",
-    "The Green Mile",
-    "Schindler's List",
-    "12 Angry Men",
-    "The Godfather",
-    "Goodfellas",
-    "The Departed",
-    "Fight Club",
-    "American Beauty",
-    "The Social Network",
-    "Spotlight",
-  ],
-  thriller: [
-    "Se7en",
-    "The Silence of the Lambs",
-    "Gone Girl",
-    "Zodiac",
-    "Prisoners",
-    "The Usual Suspects",
-    "Memento",
-    "Inception",
-    "The Prestige",
-    "Shutter Island",
-    "Gone Baby Gone",
-    "Mystic River",
-  ],
-  sciFi: [
-    "Blade Runner 2049",
-    "Arrival",
-    "Ex Machina",
-    "Interstellar",
-    "The Martian",
-    "The Matrix",
-    "Inception",
-    "District 9",
-    "Moon",
-    "Her",
-    "Looper",
-    "Source Code",
-  ],
-  horror: [
-    "Get Out",
-    "Hereditary",
-    "The Witch",
-    "A Quiet Place",
-    "It Follows",
-    "The Babadook",
-    "The Conjuring",
-    "Insidious",
-    "Sinister",
-    "The Descent",
-    "28 Days Later",
-    "The Cabin in the Woods",
-  ],
-  adventure: [
-    "Indiana Jones and the Raiders of the Lost Ark",
-    "Jurassic Park",
-    "The Mummy",
-    "National Treasure",
-    "The Goonies",
-    "The Princess Bride",
-    "The NeverEnding Story",
-    "Hook",
-    "Jumanji",
-    "The Mask of Zorro",
-    "The Three Musketeers",
-    "Robin Hood: Prince of Thieves",
-  ],
-  default: [
-    "The Shawshank Redemption",
-    "The Godfather",
-    "Pulp Fiction",
-    "Fight Club",
-    "Inception",
-    "The Dark Knight",
-    "Forrest Gump",
-    "The Matrix",
-    "Goodfellas",
-    "The Silence of the Lambs",
-  ],
-};
-
-// Get personalized fallback movies based on user preferences
-function getPersonalizedFallbackMovies(
-  favoriteGenre: string,
-  favoriteDirector: string,
-  mood: string
-): string[] {
-  console.log("Getting personalized fallback movies for:", {
-    favoriteGenre,
-    favoriteDirector,
-    mood,
-  });
-
-  // Normalize genre to match our keys
-  const genre = favoriteGenre.toLowerCase();
-  let movieList: string[] = [];
-
-  // Get genre-specific movies
-  if (genre.includes("romance") || genre.includes("romantic")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.romance;
-  } else if (genre.includes("action")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.action;
-  } else if (genre.includes("comedy") || genre.includes("funny")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.comedy;
-  } else if (genre.includes("drama")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.drama;
-  } else if (genre.includes("thriller")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.thriller;
-  } else if (genre.includes("sci") || genre.includes("science")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.sciFi;
-  } else if (genre.includes("horror")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.horror;
-  } else if (genre.includes("adventure")) {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.adventure;
-  } else {
-    movieList = PERSONALIZED_FALLBACK_MOVIES.default;
-  }
-
-  // If mood is funny, add some comedies
-  if (
-    mood.toLowerCase().includes("funny") ||
-    mood.toLowerCase().includes("comedy")
-  ) {
-    const comedyMovies = PERSONALIZED_FALLBACK_MOVIES.comedy.filter(
-      (movie) => !movieList.includes(movie)
-    );
-    movieList = [...movieList, ...comedyMovies].slice(0, 10);
-  }
-
-  // If director is specified, try to include some related movies
-  if (favoriteDirector && favoriteDirector.toLowerCase() !== "upendra") {
-    // For other directors, we could add some of their popular movies
-    // For now, we'll keep the genre-based selection
-  }
-
-  console.log("Selected personalized movies:", movieList);
-  return movieList.slice(0, 10);
-}
+// Curated fallback movies for survey
+const SURVEY_FALLBACK_MOVIES = [
+  "The Shawshank Redemption",
+  "The Godfather",
+  "Pulp Fiction",
+  "Fight Club",
+  "Inception",
+  "The Dark Knight",
+  "Forrest Gump",
+  "The Matrix",
+  "Goodfellas",
+  "The Silence of the Lambs",
+];
 
 // Try OpenAI GPT-4 for survey recommendations
 async function tryOpenAISurveyRecommendations(
@@ -270,12 +98,6 @@ export async function POST(request: Request) {
 
     const { favoriteGenre, favoriteDirector, mood } = await request.json();
 
-    console.log("Survey API called with preferences:", {
-      favoriteGenre,
-      favoriteDirector,
-      mood,
-    });
-
     // Generate personalized movie list using 3-tier system
     let movies: string[] = [];
 
@@ -334,37 +156,31 @@ export async function POST(request: Request) {
       } catch (error: any) {
         console.error("❌ TIER 2 FAILED: OpenAI error for survey");
         console.error("Error:", error.message);
-        console.log(
-          "🔄 OpenAI failed - using TIER 3 (Personalized fallbacks)..."
-        );
+        console.log("🔄 OpenAI failed - using TIER 3 (Curated fallbacks)...");
       }
     }
 
-    // TIER 3: Use personalized fallback movies if both AI services failed
+    // TIER 3: Use curated fallback movies if both AI services failed
     if (movies.length === 0) {
-      console.log("TIER 3: Using personalized fallback movies for survey");
-      movies = getPersonalizedFallbackMovies(
-        favoriteGenre,
-        favoriteDirector,
-        mood
-      );
-      console.log("✅ TIER 3 SUCCESS: Personalized fallback movies:", movies);
+      console.log("TIER 3: Using curated fallback movies for survey");
+      movies = SURVEY_FALLBACK_MOVIES;
+      console.log("✅ TIER 3 SUCCESS: Fallback survey movies:", movies);
     }
 
     // Ensure we have exactly 10 movies
     if (movies.length > 10) {
       movies = movies.slice(0, 10);
     } else if (movies.length < 10) {
-      // Add more personalized movies if needed
-      const additionalMovies = getPersonalizedFallbackMovies(
-        favoriteGenre,
-        favoriteDirector,
-        mood
-      );
+      // Add more fallback movies if needed
+      const additionalMovies = [
+        "The Green Mile",
+        "Schindler's List",
+        "12 Angry Men",
+        "The Departed",
+        "The Prestige",
+      ];
       movies = [...movies, ...additionalMovies].slice(0, 10);
     }
-
-    console.log("Final movies for user:", movies);
 
     // Update user preferences and set onboarding step to NEEDS_MOVIE_RATINGS
     await prisma.user.update({

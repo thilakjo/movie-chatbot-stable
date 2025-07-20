@@ -1,241 +1,342 @@
 "use client";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MovieCard } from "./MovieCard";
-import MovieSearch from "./MovieSearch";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { LoadingAnimation } from "./LoadingAnimation";
+import { MovieWithDetails, Recommendation } from "@/lib/types";
 
-interface Movie {
-  id: string;
-  userId: string;
-  movieTitle: string;
-  status: string;
-  posterUrl: string | null;
-  year: number | null;
-  director: string | null;
-  imdbRating: string | null;
-  leadActor: string | null;
-  rating: number | null;
-  feedback: any;
-  order: number;
-  genres: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+const FEEDBACK_QUESTIONS = [
+  { q: "How was the pacing?", o: ["Too slow", "Just right", "Too fast"] },
+  {
+    q: "Did you like the ending?",
+    o: ["Loved it", "It was okay", "Didn't like it"],
+  },
+  { q: "Would you recommend this?", o: ["Yes", "Maybe", "No"] },
+];
+const ITEMS_PER_PAGE = 8;
 
-interface DashboardProps {
-  watchlist: Movie[];
-  watched: Movie[];
-  onRefresh: () => void;
-}
-
-export default function Dashboard({
-  watchlist,
-  watched,
-  onRefresh,
-}: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<"watchlist" | "watched">(
-    "watchlist"
+export function Dashboard({
+  initialMovies,
+}: {
+  initialMovies: MovieWithDetails[];
+}) {
+  const [movies, setMovies] = useState(initialMovies);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [feedbackMovie, setFeedbackMovie] = useState<Recommendation | null>(
+    null
   );
-  const [isLoading, setIsLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ q: string; a: string }[]>([]);
+  const [feedbackStep, setFeedbackStep] = useState(0);
+  const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
 
-  const handleMovieAdded = (movieTitle: string) => {
-    console.log(`Movie added to watched: ${movieTitle}`);
-    // Refresh the dashboard to show updated data
-    onRefresh();
-  };
+  // This function now handles errors gracefully and preserves existing movies
+  const fetchAllData = async () => {
+    setLoading(true);
+    setError(null);
+    setRecommendations([]); // Clear old recommendations only
 
-  const handleMoveToWatched = async (movieId: string, movieTitle: string) => {
-    setIsLoading(true);
     try {
-      const response = await fetch("/api/move-to-watched", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ movieId }),
-      });
+      const res = await fetch("/api/recommend", { method: "POST" });
+      const data = await res.json();
 
-      if (response.ok) {
-        console.log(`Moved ${movieTitle} to watched`);
-        onRefresh();
-      } else {
-        console.error("Failed to move movie to watched");
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch recommendations.");
       }
-    } catch (error) {
-      console.error("Error moving movie:", error);
+
+      // Handle the new response format
+      if (data.error) {
+        setError(data.error);
+        setRecommendations([]);
+        // Don't update movies if there's an error - preserve existing ones
+        // Only update if we have new user movies data
+        if (data.userMovies && data.userMovies.length > 0) {
+          setMovies(
+            data.userMovies.sort(
+              (a: MovieWithDetails, b: MovieWithDetails) =>
+                (a.order ?? 0) - (b.order ?? 0)
+            )
+          );
+        }
+      } else {
+        // Success case - update both recommendations and movies
+        setMovies(
+          data.userMovies.sort(
+            (a: MovieWithDetails, b: MovieWithDetails) =>
+              (a.order ?? 0) - (b.order ?? 0)
+          ) || []
+        );
+        setRecommendations(data.recommendations || []);
+      }
+    } catch (error: any) {
+      console.error("Recommendation error:", error);
+      setError(
+        error.message || "Failed to get recommendations. Please try again."
+      );
+      // Don't clear existing movies on error - preserve them
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleMoveToWatchlist = async (movieId: string, movieTitle: string) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/move-to-watchlist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ movieId }),
-      });
-
-      if (response.ok) {
-        console.log(`Moved ${movieTitle} to watchlist`);
-        onRefresh();
-      } else {
-        console.error("Failed to move movie to watchlist");
-      }
-    } catch (error) {
-      console.error("Error moving movie:", error);
-    } finally {
-      setIsLoading(false);
+  const handleListAction = async (
+    title: string,
+    status: "WATCHLIST" | "WATCHED" | "DISMISSED",
+    feedbackPayload?: any
+  ) => {
+    setRecommendations((prev) => prev.filter((m) => m.title !== title));
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        movieTitle: title,
+        status,
+        feedback: feedbackPayload,
+      }),
+    });
+    if (status !== "DISMISSED") {
+      // Just refresh the user's lists without getting new recommendations
+      const res = await fetch("/api/user-movies");
+      const data = await res.json();
+      setMovies(data.movies || []);
     }
   };
+
+  const handleMarkRecommendationAsWatched = (rec: Recommendation) => {
+    setFeedbackMovie(rec);
+    setFeedback([]);
+    setFeedbackStep(0);
+  };
+
+  const handleFeedbackAnswer = (answer: string) => {
+    const currentQuestion = FEEDBACK_QUESTIONS[feedbackStep];
+    const newFeedback = [...feedback, { q: currentQuestion.q, a: answer }];
+    setFeedback(newFeedback);
+    if (feedbackStep < FEEDBACK_QUESTIONS.length - 1) {
+      setFeedbackStep(feedbackStep + 1);
+    } else {
+      handleListAction(feedbackMovie!.title, "WATCHED", newFeedback);
+      setFeedbackMovie(null);
+    }
+  };
+
+  const handleRemove = async (movieTitle: string) => {
+    setMovies((prev) => prev.filter((m) => m.movieTitle !== movieTitle));
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieTitle, status: "REMOVED" }),
+    });
+  };
+
+  const handleMarkAsWatched = async (movieTitle: string) => {
+    // Update local state immediately
+    setMovies((prev) =>
+      prev.map((m) =>
+        m.movieTitle === movieTitle ? { ...m, status: "WATCHED" } : m
+      )
+    );
+
+    // Update in database
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieTitle, status: "WATCHED" }),
+    });
+  };
+
+  const watchlist = movies.filter((m) => m.status === "WATCHLIST");
+  const watched = movies.filter((m) => m.status === "WATCHED");
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      {/* Header with Search */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          Your Movie Dashboard
-        </h1>
-
-        {/* Search Bar */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-2">
-            Add Movies to Watched
-          </h2>
-          <div className="max-w-md">
-            <MovieSearch onMovieAdded={handleMovieAdded} />
-          </div>
-        </div>
-
-        {/* Simple Stats */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">
-            📊 Your Movie Stats
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="font-medium">Watchlist:</span> {watchlist.length}
-            </div>
-            <div>
-              <span className="font-medium">Watched:</span> {watched.length}
-            </div>
-            <div>
-              <span className="font-medium">Total Movies:</span>{" "}
-              {watchlist.length + watched.length}
-            </div>
-            <div>
-              <span className="font-medium">Status:</span> Active
-            </div>
-          </div>
-        </div>
+    <div className="max-w-7xl mx-auto animate-fadeIn pb-24">
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm py-4 mb-8 flex flex-col md:flex-row justify-center items-center gap-4 border-b">
+        <h1 className="text-3xl font-bold">Your Movie Dashboard</h1>
+        <Button onClick={fetchAllData} disabled={loading}>
+          {loading ? "Finding..." : "Get New Recommendations"}
+        </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex space-x-1 mb-6 bg-gray-100 rounded-lg p-1">
-        <button
-          onClick={() => setActiveTab("watchlist")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-            activeTab === "watchlist"
-              ? "bg-white text-blue-600 shadow-sm"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-        >
-          Watchlist ({watchlist.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("watched")}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-            activeTab === "watched"
-              ? "bg-white text-blue-600 shadow-sm"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-        >
-          Watched ({watched.length})
-        </button>
-      </div>
+      {loading && <LoadingAnimation />}
 
-      {/* Content */}
-      <div className="min-h-[400px]">
-        {activeTab === "watchlist" && (
-          <div>
-            {watchlist.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-gray-400 text-6xl mb-4">🎬</div>
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                  Your watchlist is empty
-                </h3>
-                <p className="text-gray-500">
-                  Get new recommendations to start building your watchlist!
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {watchlist.map((movie) => (
-                  <MovieCard
-                    key={movie.id}
-                    title={movie.movieTitle}
-                    initialData={movie}
-                    onMarkAsWatched={() =>
-                      handleMoveToWatched(movie.id, movie.movieTitle)
-                    }
-                    onRemove={() =>
-                      handleMoveToWatchlist(movie.id, movie.movieTitle)
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "watched" && (
-          <div>
-            {watched.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-gray-400 text-6xl mb-4">✅</div>
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                  No movies watched yet
-                </h3>
-                <p className="text-gray-500">
-                  Use the search above or flip movie cards to mark them as
-                  watched!
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {watched.map((movie) => (
-                  <MovieCard
-                    key={movie.id}
-                    title={movie.movieTitle}
-                    initialData={movie}
-                    onMarkAsWatched={() =>
-                      handleMoveToWatched(movie.id, movie.movieTitle)
-                    }
-                    onRemove={() =>
-                      handleMoveToWatchlist(movie.id, movie.movieTitle)
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <span>Updating...</span>
-            </div>
-          </div>
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 font-medium">Error: {error}</p>
+          <Button
+            onClick={() => setError(null)}
+            variant="outline"
+            size="sm"
+            className="mt-2"
+          >
+            Dismiss
+          </Button>
         </div>
       )}
+
+      {!loading && recommendations.length > 0 && (
+        <div className="mb-12 px-12">
+          <h2 className="text-3xl font-bold mb-6 text-center">
+            Recommended For You
+          </h2>
+          <Carousel
+            className="w-full"
+            opts={{ align: "start", loop: recommendations.length > 5 }}
+          >
+            <CarouselContent className="-ml-4">
+              {recommendations.map((rec) => (
+                <CarouselItem
+                  key={rec.title}
+                  className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
+                >
+                  <MovieCard title={rec.title} initialData={rec as any}>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleListAction(rec.title, "WATCHLIST");
+                      }}
+                      size="sm"
+                      className="w-full text-xs h-7"
+                    >
+                      Watchlist
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkRecommendationAsWatched(rec);
+                      }}
+                      size="sm"
+                      className="w-full text-xs h-7"
+                    >
+                      Watched
+                    </Button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleListAction(rec.title, "DISMISSED");
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs h-7 bg-black/50 border-white/50 text-white hover:bg-black/70"
+                    >
+                      Dismiss
+                    </Button>
+                  </MovieCard>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious />
+            <CarouselNext />
+          </Carousel>
+        </div>
+      )}
+
+      <Tabs defaultValue="watchlist" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="watchlist">
+            My Watchlist ({watchlist.length})
+          </TabsTrigger>
+          <TabsTrigger value="watched">
+            Watched Movies ({watched.length})
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="watchlist" className="mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+            {(showAll.watchlist
+              ? watchlist
+              : watchlist.slice(0, ITEMS_PER_PAGE)
+            ).map((movie) => (
+              <MovieCard
+                key={movie.id}
+                title={movie.movieTitle}
+                initialData={movie}
+                onRemove={() => handleRemove(movie.movieTitle)}
+                onMarkAsWatched={() => handleMarkAsWatched(movie.movieTitle)}
+              />
+            ))}
+          </div>
+          {watchlist.length > ITEMS_PER_PAGE && (
+            <Button
+              variant="link"
+              onClick={() =>
+                setShowAll((p) => ({ ...p, watchlist: !p.watchlist }))
+              }
+              className="mt-4"
+            >
+              {showAll.watchlist
+                ? "Show Less"
+                : `Show ${watchlist.length - ITEMS_PER_PAGE} More`}
+            </Button>
+          )}
+        </TabsContent>
+        <TabsContent value="watched" className="mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+            {(showAll.watched ? watched : watched.slice(0, ITEMS_PER_PAGE)).map(
+              (movie) => (
+                <MovieCard
+                  key={movie.id}
+                  title={movie.movieTitle}
+                  initialData={movie}
+                  onRemove={() => handleRemove(movie.movieTitle)}
+                />
+              )
+            )}
+          </div>
+          {watched.length > ITEMS_PER_PAGE && (
+            <Button
+              variant="link"
+              onClick={() => setShowAll((p) => ({ ...p, watched: !p.watched }))}
+              className="mt-4"
+            >
+              {showAll.watched
+                ? "Show Less"
+                : `Show ${watched.length - ITEMS_PER_PAGE} More`}
+            </Button>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog
+        open={!!feedbackMovie}
+        onOpenChange={() => setFeedbackMovie(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              How was &quot;{feedbackMovie?.title}&quot;?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-lg">{FEEDBACK_QUESTIONS[feedbackStep].q}</p>
+            <div className="flex flex-col gap-2">
+              {FEEDBACK_QUESTIONS[feedbackStep].o.map((option) => (
+                <Button
+                  key={option}
+                  onClick={() => handleFeedbackAnswer(option)}
+                  variant="outline"
+                  className="justify-start"
+                >
+                  {option}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

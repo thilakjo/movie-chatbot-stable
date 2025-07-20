@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { MovieWithDetails } from "@/lib/types";
 
@@ -59,11 +58,10 @@ export function MovieCard({
         {/* Front */}
         <div className="absolute w-full h-full backface-hidden group">
           {details ? (
-            <Image
+            <img
               src={details.posterUrl || FALLBACK_POSTER}
               alt={title}
-              fill
-              className="object-cover rounded-lg"
+              className="w-full h-full object-cover rounded-lg shadow-md"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = FALLBACK_POSTER;
               }}
