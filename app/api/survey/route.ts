@@ -1,4 +1,4 @@
-// app/api/survey/route.ts (Improved Version)
+// app/api/survey/route.ts (Improved Version with Better AI Handling)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -7,7 +7,6 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const prisma = new PrismaClient();
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const FALLBACK_MOVIES = [
   "Inception",
   "The Dark Knight",
@@ -21,6 +20,14 @@ const FALLBACK_MOVIES = [
   "Whiplash",
 ];
 
+// Validate Gemini API key
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error("GEMINI_API_KEY is not set in environment variables");
+}
+
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
@@ -33,9 +40,14 @@ export async function POST(req: Request) {
     const preferences = await req.json();
     let dynamicMovies: string[] = [];
 
-    try {
-      // Create a more detailed prompt for better movie selection
-      const prompt = `Based on a user's preferences:
+    // Check if Gemini API is available
+    if (!genAI) {
+      console.error("Gemini AI is not available - API key missing");
+      dynamicMovies = FALLBACK_MOVIES;
+    } else {
+      try {
+        // Create a more detailed prompt for better movie selection
+        const prompt = `Based on a user's preferences:
 - Favorite Genre: "${preferences.favoriteGenre}"
 - Favorite Director: "${preferences.favoriteDirector}"
 - Current Mood: "${preferences.mood}"
@@ -49,35 +61,49 @@ Generate a list of 10 well-known movies that would appeal to this user. Consider
 
 Return ONLY a valid JSON array of movie titles as strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+        console.log(
+          "Attempting Gemini AI call for survey with prompt:",
+          prompt.substring(0, 200) + "..."
+        );
 
-      // Clean the response and parse JSON
-      const cleanedText = text.replace(/```json|```/g, "").trim();
-      dynamicMovies = JSON.parse(cleanedText);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      if (!Array.isArray(dynamicMovies) || dynamicMovies.length === 0) {
-        throw new Error("Gemini did not return a valid movie list.");
+        // Add timeout for Gemini call
+        const geminiController = new AbortController();
+        const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
+
+        const result = await model.generateContent(prompt);
+        clearTimeout(geminiTimeout);
+
+        const text = result.response.text();
+        console.log("Gemini survey response:", text.substring(0, 200) + "...");
+
+        // Clean the response and parse JSON
+        const cleanedText = text.replace(/```json|```/g, "").trim();
+        dynamicMovies = JSON.parse(cleanedText);
+
+        if (!Array.isArray(dynamicMovies) || dynamicMovies.length === 0) {
+          throw new Error("Gemini did not return a valid movie list.");
+        }
+
+        // Ensure we have exactly 10 movies
+        if (dynamicMovies.length > 10) {
+          dynamicMovies = dynamicMovies.slice(0, 10);
+        } else if (dynamicMovies.length < 10) {
+          // Add some fallback movies if we don't have enough
+          const remaining = 10 - dynamicMovies.length;
+          const fallbackToAdd = FALLBACK_MOVIES.slice(0, remaining);
+          dynamicMovies = [...dynamicMovies, ...fallbackToAdd];
+        }
+
+        console.log("Generated dynamic movies:", dynamicMovies);
+      } catch (e) {
+        console.error(
+          "Gemini call for dynamic movie list failed, using fallback. Error:",
+          e
+        );
+        dynamicMovies = FALLBACK_MOVIES;
       }
-
-      // Ensure we have exactly 10 movies
-      if (dynamicMovies.length > 10) {
-        dynamicMovies = dynamicMovies.slice(0, 10);
-      } else if (dynamicMovies.length < 10) {
-        // Add some fallback movies if we don't have enough
-        const remaining = 10 - dynamicMovies.length;
-        const fallbackToAdd = FALLBACK_MOVIES.slice(0, remaining);
-        dynamicMovies = [...dynamicMovies, ...fallbackToAdd];
-      }
-
-      console.log("Generated dynamic movies:", dynamicMovies);
-    } catch (e) {
-      console.error(
-        "Gemini call for dynamic movie list failed, using fallback. Error:",
-        e
-      );
-      dynamicMovies = FALLBACK_MOVIES;
     }
 
     // Save preferences and dynamic movies

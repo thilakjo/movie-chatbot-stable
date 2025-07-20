@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts (Production-Ready Version)
+// app/api/recommend/route.ts (Production-Ready Version with Better AI Handling)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -7,9 +7,16 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const prisma = new PrismaClient();
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const FALLBACK_POSTER = "/fallback-poster.svg";
+
+// Validate Gemini API key
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error("GEMINI_API_KEY is not set in environment variables");
+}
+
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // Type definitions for TMDb API responses
 interface TMDBMovieDetails {
@@ -182,19 +189,47 @@ export async function POST() {
     let recommendations: { title: string }[] = [];
     let rawResponse = "";
 
+    // Check if Gemini API is available
+    if (!genAI) {
+      console.error("Gemini AI is not available - API key missing");
+      return NextResponse.json({
+        recommendations: [],
+        userMovies: [],
+        error: "AI service is currently unavailable. Please try again later.",
+      });
+    }
+
     try {
+      console.log(
+        "Attempting Gemini AI call with prompt:",
+        prompt.substring(0, 200) + "..."
+      );
+
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // Add timeout for Gemini call
+      const geminiController = new AbortController();
+      const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
+
       const result = await model.generateContent(prompt);
+      clearTimeout(geminiTimeout);
+
       rawResponse = result.response.text();
+      console.log(
+        "Gemini raw response:",
+        rawResponse.substring(0, 200) + "..."
+      );
 
       const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
       if (!jsonMatch) {
+        console.error("No valid JSON array found in Gemini response");
         throw new Error("No valid JSON array found in the AI response.");
       }
 
       recommendations = JSON.parse(jsonMatch[0]);
 
       if (!Array.isArray(recommendations) || recommendations.length === 0) {
+        console.error("Gemini returned empty or invalid array");
         throw new Error("AI returned empty or invalid data.");
       }
 
@@ -202,6 +237,8 @@ export async function POST() {
       if (recommendations.length > 5) {
         recommendations = recommendations.slice(0, 5);
       }
+
+      console.log("Successfully parsed recommendations:", recommendations);
     } catch (e) {
       console.error("--- GEMINI RECOMMENDATION ERROR ---");
       console.error("Failed to get or parse recommendations from Gemini.");
@@ -210,13 +247,42 @@ export async function POST() {
       console.error("User preferences:", preferences);
       console.error("---------------------------------");
 
-      // Return a fallback response instead of an error
-      return NextResponse.json({
-        recommendations: [],
-        userMovies: [],
-        error:
-          "Unable to generate recommendations at this time. Please try again later.",
-      });
+      // Try a simpler fallback approach
+      try {
+        console.log("Attempting fallback recommendation generation...");
+        const fallbackPrompt = `Recommend 5 popular movies that are critically acclaimed. Return ONLY a valid JSON array of objects with "title" key. Example: [{"title": "The Shawshank Redemption"}]`;
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const fallbackResult = await model.generateContent(fallbackPrompt);
+        const fallbackResponse = fallbackResult.response.text();
+
+        const fallbackJsonMatch = fallbackResponse.match(
+          /\[\s*\{[\s\S]*\}\s*\]/
+        );
+        if (fallbackJsonMatch) {
+          recommendations = JSON.parse(fallbackJsonMatch[0]);
+          if (Array.isArray(recommendations) && recommendations.length > 0) {
+            console.log(
+              "Fallback recommendations successful:",
+              recommendations
+            );
+            // Continue with fallback recommendations
+          } else {
+            throw new Error("Fallback also failed");
+          }
+        } else {
+          throw new Error("Fallback also failed");
+        }
+      } catch (fallbackError) {
+        console.error("Fallback recommendation also failed:", fallbackError);
+        // Return a fallback response instead of an error
+        return NextResponse.json({
+          recommendations: [],
+          userMovies: [],
+          error:
+            "Unable to generate recommendations at this time. Please try again later.",
+        });
+      }
     }
 
     // Fetch movie details with better error handling
@@ -249,6 +315,8 @@ export async function POST() {
       )
       .map((result) => result.value)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    console.log("Returning successful recommendations:", successfulRecs.length);
 
     return NextResponse.json({
       recommendations: successfulRecs,
