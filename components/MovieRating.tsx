@@ -1,7 +1,7 @@
 // components/MovieRating.tsx (Corrected)
 
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,30 +18,54 @@ type Ratings = { [key: string]: string };
 
 export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
   const [ratings, setRatings] = useState<Ratings>({});
+  const [remainingMovies, setRemainingMovies] =
+    useState<string[]>(moviesToRate);
   const [isLoading, setIsLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
   const router = useRouter();
 
-  const handleRatingChange = (movie: string, rating: string) => {
-    setRatings((prev) => ({ ...prev, [movie]: rating }));
-  };
+  useEffect(() => {
+    setRemainingMovies(moviesToRate.filter((m) => !(m in ratings)));
+  }, [moviesToRate, ratings]);
 
-  const handleSubmit = async () => {
+  const handleRatingChange = async (movie: string, rating: string) => {
+    setRatings((prev) => ({ ...prev, [movie]: rating }));
     setIsLoading(true);
-    await fetch("/api/rate-movies", {
+    const res = await fetch("/api/rate-movies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ratings }),
+      body: JSON.stringify({ ratings: { ...ratings, [movie]: rating } }),
     });
-    router.refresh();
+    const data = await res.json();
+    setIsLoading(false);
+    if (data.recommendations) {
+      setRecommendations(data.recommendations);
+    }
+    if (data.nextMoviesToRate) {
+      setRemainingMovies(
+        data.nextMoviesToRate.filter((m: string) => !(m in ratings))
+      );
+    }
   };
 
-  if (!moviesToRate || moviesToRate.length === 0) {
+  if (remainingMovies.length === 0) {
     return (
       <Card className="max-w-2xl mx-auto animate-fadeIn">
         <CardHeader>
-          <CardTitle>Generating Your Personalized Movie List...</CardTitle>
+          <CardTitle>Thank you for rating!</CardTitle>
           <CardDescription>
-            Please wait a moment, this can take a few seconds.
+            {recommendations.length > 0 ? (
+              <>
+                Here are some recommendations for you:
+                <ul className="mt-2 list-disc list-inside">
+                  {recommendations.map((rec) => (
+                    <li key={rec}>{rec}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <>Generating your recommendations...</>
+            )}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -57,7 +81,7 @@ export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {moviesToRate.map((movie) => (
+        {remainingMovies.slice(0, 1).map((movie) => (
           <div key={movie}>
             <Label className="font-semibold">{movie}</Label>
             <RadioGroup
@@ -73,15 +97,16 @@ export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
             </RadioGroup>
           </div>
         ))}
-        <Button
-          onClick={handleSubmit}
-          disabled={
-            isLoading || Object.keys(ratings).length < moviesToRate.length
-          }
-          className="w-full"
-        >
-          {isLoading ? "Saving..." : "Submit Ratings"}
-        </Button>
+        {recommendations.length > 0 && (
+          <div className="mt-6">
+            <div className="font-semibold mb-2">Live Recommendations:</div>
+            <ul className="list-disc list-inside">
+              {recommendations.map((rec) => (
+                <li key={rec}>{rec}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
