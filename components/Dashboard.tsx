@@ -271,7 +271,6 @@ export function Dashboard({
     status: "WATCHLIST" | "WATCHED" | "DISMISSED" | "LIKED",
     feedbackPayload?: any
   ) => {
-    setRecommendations((prev) => prev.filter((m) => m.title !== title));
     await fetch("/api/user-movies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -281,11 +280,16 @@ export function Dashboard({
         feedback: feedbackPayload,
       }),
     });
-    if (status !== "DISMISSED") {
-      // Just refresh the user's lists without getting new recommendations
-      const res = await fetch("/api/user-movies");
-      const data = await res.json();
-      setMovies(data.movies || []);
+    if (status === "DISMISSED") {
+      setRecommendations((prev) => prev.filter((m) => m.title !== title));
+    }
+    if (status === "WATCHED") {
+      // Move to watched in local state
+      setMovies((prev) =>
+        prev.map((m) =>
+          m.movieTitle === title ? { ...m, status: "WATCHED" } : m
+        )
+      );
     }
   };
 
@@ -335,6 +339,8 @@ export function Dashboard({
   const handleLike = (title: string) => {
     setLikedRecs((prev) => new Set(prev).add(title));
     handleListAction(title, "LIKED");
+    // Optionally, also mark as watched
+    handleListAction(title, "WATCHED");
   };
 
   const watchlist = movies.filter((m) => m.status === "WATCHLIST");
