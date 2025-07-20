@@ -1,48 +1,12 @@
-// app/page.tsx (Working Version)
+// app/page.tsx (Minimal Debug Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { SignInButton } from "@/components/SignInButton";
 import { SignOutButton } from "@/components/SignOutButton";
-import { Survey } from "@/components/Survey";
-import Dashboard from "@/components/Dashboard";
-import { MovieRating } from "@/components/MovieRating";
-import { CasualQuestions } from "@/components/CasualQuestions";
 
 const prisma = new PrismaClient();
-
-const OnboardingFlow = ({ user }: { user: any }) => {
-  switch (user?.onboardingStep) {
-    case "NEEDS_INITIAL_SURVEY":
-      return <Survey />;
-    case "NEEDS_MOVIE_RATINGS":
-      // Extract the dynamic movies from preferences
-      const preferences = (user.preferences as any) || {};
-      const moviesToRate = preferences.dynamicMoviesToRate || [];
-      console.log("Movies to rate:", moviesToRate);
-      return <MovieRating moviesToRate={moviesToRate} />;
-    case "NEEDS_CASUAL_QUESTIONS":
-      return <CasualQuestions />;
-    case "ONBOARDING_COMPLETE":
-    default:
-      // For returning users who completed onboarding
-      const watchlist =
-        user?.movies?.filter((m: any) => m.status === "watchlist") || [];
-      const watched =
-        user?.movies?.filter((m: any) => m.status === "watched") || [];
-      return (
-        <Dashboard
-          watchlist={watchlist}
-          watched={watched}
-          onRefresh={() => {
-            // This will be handled by the client component
-            window.location.reload();
-          }}
-        />
-      );
-  }
-};
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
@@ -59,16 +23,103 @@ export default async function Home() {
   }
 
   try {
+    // Minimal user fetch
     const user = await prisma.user.findUnique({
       where: { id: (session.user as any).id },
-      include: {
-        movies: {
-          orderBy: {
-            order: "asc",
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        onboardingStep: true,
+        preferences: true,
       },
     });
+
+    if (!user) {
+      return (
+        <main className="p-4 md:p-8">
+          <div className="flex justify-between items-center mb-6">
+            <p className="text-lg">
+              Welcome,{" "}
+              <span className="font-semibold">{session.user.name}</span>!
+            </p>
+            <SignOutButton />
+          </div>
+          <div className="max-w-6xl mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+              User Not Found
+            </h1>
+            <p className="text-gray-600">
+              User profile not found. Please try signing in again.
+            </p>
+          </div>
+        </main>
+      );
+    }
+
+    // Simple onboarding flow without complex components
+    let content;
+    switch (user.onboardingStep) {
+      case "NEEDS_INITIAL_SURVEY":
+        content = (
+          <div className="max-w-6xl mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+              Survey Step
+            </h1>
+            <p className="text-gray-600">Survey component would load here.</p>
+          </div>
+        );
+        break;
+      case "NEEDS_MOVIE_RATINGS":
+        content = (
+          <div className="max-w-6xl mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+              Movie Rating Step
+            </h1>
+            <p className="text-gray-600">
+              Movie rating component would load here.
+            </p>
+          </div>
+        );
+        break;
+      case "NEEDS_CASUAL_QUESTIONS":
+        content = (
+          <div className="max-w-6xl mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+              Casual Questions Step
+            </h1>
+            <p className="text-gray-600">
+              Casual questions component would load here.
+            </p>
+          </div>
+        );
+        break;
+      case "ONBOARDING_COMPLETE":
+      default:
+        content = (
+          <div className="max-w-6xl mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">Dashboard</h1>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <h3 className="text-lg font-semibold text-blue-800 mb-2">
+                📊 Dashboard Status
+              </h3>
+              <p className="text-gray-700">
+                Dashboard is working! User onboarding step:{" "}
+                {user.onboardingStep}
+              </p>
+            </div>
+            <div className="text-center py-12">
+              <div className="text-gray-400 text-6xl mb-4">🎬</div>
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                Dashboard Ready
+              </h3>
+              <p className="text-gray-500">
+                The dashboard is working correctly!
+              </p>
+            </div>
+          </div>
+        );
+        break;
+    }
 
     return (
       <main className="p-4 md:p-8">
@@ -78,8 +129,7 @@ export default async function Home() {
           </p>
           <SignOutButton />
         </div>
-
-        <OnboardingFlow user={user} />
+        {content}
       </main>
     );
   } catch (error) {
@@ -104,6 +154,10 @@ export default async function Home() {
             <p className="text-gray-700">
               There was an error loading your dashboard. Please try refreshing
               the page.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Error details:{" "}
+              {error instanceof Error ? error.message : "Unknown error"}
             </p>
           </div>
         </div>
