@@ -159,7 +159,7 @@ export default function MovieSearch({ onMovieAdded }: MovieSearchProps) {
         !isLoading && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50">
             <div className="px-4 py-2 text-gray-500">
-              No movies found for "{query}"
+              No movies found for &quot;{query}&quot;
             </div>
           </div>
         )}

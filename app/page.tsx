@@ -6,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { SignInButton } from "@/components/SignInButton";
 import { SignOutButton } from "@/components/SignOutButton";
 import { Survey } from "@/components/Survey";
-import { Dashboard } from "@/components/Dashboard";
+import Dashboard from "@/components/Dashboard";
 import { MovieRating } from "@/components/MovieRating";
 import { CasualQuestions } from "@/components/CasualQuestions";
 
@@ -25,10 +25,22 @@ const OnboardingFlow = ({ user }: { user: any }) => {
     case "NEEDS_CASUAL_QUESTIONS":
       return <CasualQuestions />;
     case "ONBOARDING_COMPLETE":
-      return <Dashboard initialMovies={user?.movies || []} />;
     default:
       // For returning users who completed onboarding
-      return <Dashboard initialMovies={user?.movies || []} />;
+      const watchlist =
+        user?.movies?.filter((m: any) => m.status === "watchlist") || [];
+      const watched =
+        user?.movies?.filter((m: any) => m.status === "watched") || [];
+      return (
+        <Dashboard
+          watchlist={watchlist}
+          watched={watched}
+          onRefresh={() => {
+            // This will be handled by the client component
+            window.location.reload();
+          }}
+        />
+      );
   }
 };
 
