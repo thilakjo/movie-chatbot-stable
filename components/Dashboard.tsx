@@ -280,7 +280,11 @@ export function Dashboard({
         feedback: feedbackPayload,
       }),
     });
-    if (status === "DISMISSED") {
+    if (
+      status === "DISMISSED" ||
+      status === "WATCHLIST" ||
+      status === "WATCHED"
+    ) {
       setRecommendations((prev) => prev.filter((m) => m.title !== title));
     }
     if (status === "WATCHED") {
@@ -288,6 +292,14 @@ export function Dashboard({
       setMovies((prev) =>
         prev.map((m) =>
           m.movieTitle === title ? { ...m, status: "WATCHED" } : m
+        )
+      );
+    }
+    if (status === "WATCHLIST") {
+      // Move to watchlist in local state
+      setMovies((prev) =>
+        prev.map((m) =>
+          m.movieTitle === title ? { ...m, status: "WATCHLIST" } : m
         )
       );
     }
