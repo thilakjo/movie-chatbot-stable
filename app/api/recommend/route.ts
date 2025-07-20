@@ -351,12 +351,52 @@ export async function POST() {
       )}. `;
     }
 
+    // Use movie ratings to improve recommendations
     if (Object.keys(movieRatings).length > 0) {
       const likedMovies = Object.entries(movieRatings)
         .filter(([_, rating]) => rating === "Good")
         .map(([title, _]) => title);
+      const dislikedMovies = Object.entries(movieRatings)
+        .filter(([_, rating]) => rating === "Didn't like")
+        .map(([title, _]) => title);
+
       if (likedMovies.length > 0) {
-        prompt += `They liked these movies: ${likedMovies.join(", ")}. `;
+        prompt += `They LIKED these movies: ${likedMovies.join(", ")}. `;
+      }
+      if (dislikedMovies.length > 0) {
+        prompt += `They DISLIKED these movies: ${dislikedMovies.join(", ")}. `;
+      }
+
+      // Add genre analysis based on ratings
+      const likedGenres = new Set();
+      likedMovies.forEach((movie) => {
+        if (
+          movie.toLowerCase().includes("romance") ||
+          movie.toLowerCase().includes("love")
+        )
+          likedGenres.add("romance");
+        if (
+          movie.toLowerCase().includes("action") ||
+          movie.toLowerCase().includes("fight")
+        )
+          likedGenres.add("action");
+        if (
+          movie.toLowerCase().includes("comedy") ||
+          movie.toLowerCase().includes("funny")
+        )
+          likedGenres.add("comedy");
+        if (movie.toLowerCase().includes("drama")) likedGenres.add("drama");
+        if (
+          movie.toLowerCase().includes("thriller") ||
+          movie.toLowerCase().includes("suspense")
+        )
+          likedGenres.add("thriller");
+      });
+
+      if (likedGenres.size > 0) {
+        prompt += `Based on their ratings, they seem to enjoy: ${Array.from(
+          likedGenres
+        ).join(", ")}. `;
       }
     }
 
@@ -366,6 +406,8 @@ export async function POST() {
     prompt += `Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
     console.log("Built prompt length:", prompt.length);
+    console.log("User preferences:", preferences);
+    console.log("Movie ratings count:", Object.keys(movieRatings).length);
 
     let recommendations: { title: string }[] = [];
     let rawResponse = "";
