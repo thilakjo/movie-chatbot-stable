@@ -92,7 +92,7 @@ export function MovieRating({ moviesToRate, onComplete }: MovieRatingProps) {
     setIsLoading(false);
     setSubmitted(true);
     if (onComplete) {
-      setTimeout(() => onComplete(), 1000);
+      setTimeout(() => onComplete(), 3000);
     }
   };
 

@@ -3,10 +3,13 @@ import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 const prisma = new PrismaClient();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
 export async function POST(req: Request) {
   try {
@@ -51,7 +54,43 @@ export async function POST(req: Request) {
         aiError = e.message || "Gemini AI error";
       }
     }
-    // Fallback: use a default list if AI fails
+    // Fallback: Try OpenAI if Gemini fails
+    if (!movies.length && openai) {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content:
+                'You are a movie expert. Return ONLY a valid JSON array of movie titles as strings. Example: ["The Shawshank Redemption", "Pulp Fiction"]',
+            },
+            {
+              role: "user",
+              content: `Based on these preferences, recommend 10 movies:\n- Favorite Genre: ${favoriteGenre}\n- Favorite Director: ${favoriteDirector}\n- Mood: ${mood}\n- Vibe check answers: ${
+                Array.isArray(casualAnswers) && casualAnswers.length > 0
+                  ? casualAnswers.map((a, i) => `Q${i + 1}: ${a}`).join("; ")
+                  : "None"
+              }`,
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        const response = completion.choices[0]?.message?.content || "";
+        const jsonMatch = response.match(
+          /\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/
+        );
+        if (jsonMatch) {
+          movies = JSON.parse(jsonMatch[0]);
+        } else {
+          aiError = "Invalid JSON response from OpenAI";
+        }
+      } catch (e: any) {
+        aiError = e.message || "OpenAI error";
+      }
+    }
+    // Fallback: use a default list if both AI fail
     if (!movies.length) {
       movies = [
         "The Shawshank Redemption",

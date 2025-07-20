@@ -21,6 +21,8 @@ export function MovieCard({
   onRemove,
   onMarkAsWatched,
   children,
+  isFlippable,
+  backContent,
 }: MovieCardProps) {
   const [details, setDetails] = useState<MovieWithDetails | null>(
     initialData || null
@@ -47,10 +49,21 @@ export function MovieCard({
     }
   }, [title, details]);
 
+  // Only allow flipping if not mobile overlay active
+  const handleCardClick = (e: React.MouseEvent) => {
+    // If overlay is visible (mobile), do not flip
+    if (
+      (e.target as HTMLElement).closest(".recommendation-overlay-mobile-active")
+    ) {
+      return;
+    }
+    setIsFlipped((f) => !f);
+  };
+
   return (
     <div
       className="w-full aspect-[2/3] perspective-1000"
-      onClick={() => setIsFlipped(!isFlipped)}
+      onClick={handleCardClick}
     >
       <div
         className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
@@ -75,7 +88,9 @@ export function MovieCard({
             <h3 className="text-white text-sm font-bold truncate">{title}</h3>
           </div>
           {children && (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-2 gap-2 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity opacity-100">
+            <div
+              className={`absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-2 gap-2 recommendation-overlay-mobile-active sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity`}
+            >
               {children}
             </div>
           )}

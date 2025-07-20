@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MovieWithDetails } from "@/lib/types";
+import { Card, CardContent } from "@/components/ui/card";
 
 // Local Recommendation type for dashboard
 type Recommendation = {
@@ -209,6 +210,8 @@ export function Dashboard({
   const [feedback, setFeedback] = useState<{ q: string; a: string }[]>([]);
   const [feedbackStep, setFeedbackStep] = useState(0);
   const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+  const [activeCard, setActiveCard] = useState<string | null>(null);
 
   // This function now handles errors gracefully and preserves existing movies
   const fetchAllData = async () => {
@@ -354,7 +357,7 @@ export function Dashboard({
       )}
 
       {!loading && recommendations.length > 0 && (
-        <div className="mb-12 px-12">
+        <div className="mb-12 px-2 sm:px-12">
           <h2 className="text-3xl font-bold mb-6 text-center">
             Recommended For You
           </h2>
@@ -369,58 +372,108 @@ export function Dashboard({
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
                   <MovieCard title={rec.title} initialData={rec as any}>
-                    {/* AI Explanation */}
-                    {rec.explanation && (
-                      <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
-                        {rec.explanation}
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-2 w-full sm:flex-row sm:gap-1 mt-2">
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleListAction(rec.title, "LIKED");
-                        }}
-                        size="sm"
-                        variant="outline"
-                        className="w-full text-xs h-9 flex items-center justify-center gap-1"
-                      >
-                        <span role="img" aria-label="Like">
-                          ❤️
-                        </span>{" "}
-                        Like
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleListAction(rec.title, "WATCHLIST");
-                        }}
-                        size="sm"
-                        className="w-full text-xs h-9"
-                      >
-                        Watchlist
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMarkRecommendationAsWatched(rec);
-                        }}
-                        size="sm"
-                        className="w-full text-xs h-9"
-                      >
-                        Watched
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleListAction(rec.title, "DISMISSED");
-                        }}
-                        size="sm"
-                        variant="outline"
-                        className="w-full text-xs h-9 bg-black/50 border-white/50 text-white hover:bg-black/70"
-                      >
-                        Dismiss
-                      </Button>
+                    {/* Overlay for desktop hover or mobile tap */}
+                    <div
+                      className={`w-full h-full flex flex-col items-center justify-center transition-opacity duration-200 ${
+                        isMobile
+                          ? activeCard === rec.title
+                            ? "opacity-100 z-20"
+                            : "opacity-0 pointer-events-none"
+                          : "group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isMobile && activeCard !== rec.title)
+                          setActiveCard(rec.title);
+                      }}
+                    >
+                      <Card className="w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90">
+                        <CardContent className="flex flex-col gap-2 p-3 sm:p-2">
+                          {/* Description/Explanation */}
+                          <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
+                            {rec.explanation && rec.explanation.length > 10
+                              ? rec.explanation
+                              : `Why this movie? This is a top pick based on your preferences, ratings, and vibe check!`}
+                          </div>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleListAction(rec.title, "LIKED");
+                              if (isMobile) setActiveCard(null);
+                            }}
+                            size="sm"
+                            variant="outline"
+                            className="w-full text-xs h-10 flex items-center justify-center gap-1"
+                          >
+                            <span role="img" aria-label="Like">
+                              ❤️
+                            </span>{" "}
+                            Like
+                          </Button>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleListAction(rec.title, "WATCHLIST");
+                              if (isMobile) setActiveCard(null);
+                            }}
+                            size="sm"
+                            className="w-full text-xs h-10"
+                          >
+                            Watchlist
+                          </Button>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkRecommendationAsWatched(rec);
+                              if (isMobile) setActiveCard(null);
+                            }}
+                            size="sm"
+                            className="w-full text-xs h-10"
+                          >
+                            Watched
+                          </Button>
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleListAction(rec.title, "DISMISSED");
+                              if (isMobile) setActiveCard(null);
+                            }}
+                            size="sm"
+                            variant="outline"
+                            className="w-full text-xs h-10 bg-black/50 border-white/50 text-white hover:bg-black/70"
+                          >
+                            Dismiss
+                          </Button>
+                          {/* Google it button */}
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const query = encodeURIComponent(
+                                rec.title + (rec.year ? ` ${rec.year}` : "")
+                              );
+                              window.open(
+                                `https://www.google.com/search?q=${query}`,
+                                "_blank"
+                              );
+                            }}
+                            size="sm"
+                            variant="secondary"
+                            className="w-full text-xs h-10"
+                          >
+                            Google it
+                          </Button>
+                          {isMobile && (
+                            <Button
+                              onClick={() => setActiveCard(null)}
+                              size="sm"
+                              variant="ghost"
+                              className="w-full text-xs h-8 mt-1"
+                            >
+                              Close
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
                     </div>
                   </MovieCard>
                 </CarouselItem>
