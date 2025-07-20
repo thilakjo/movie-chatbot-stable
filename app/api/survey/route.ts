@@ -39,9 +39,9 @@ export async function POST(req: Request) {
     try {
       const prompt = `Based on these user preferences: ${JSON.stringify(
         preferences
-      )}, list 10 well-known movies that are highly relevant to their taste. IMPORTANT: Return ONLY a JSON array of strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
+      )}, list 10 well-known movies that are highly relevant to their taste and the director (his movies language) focus mainly on the language of the director (if available). IMPORTANT: Return ONLY a JSON array of strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const result = await model.generateContent(prompt);
       const text = result.response.text();
 
