@@ -117,7 +117,7 @@ export function Dashboard({
     }
   };
 
-  const handleMarkAsWatched = (rec: Recommendation) => {
+  const handleMarkRecommendationAsWatched = (rec: Recommendation) => {
     setFeedbackMovie(rec);
     setFeedback([]);
     setFeedbackStep(0);
@@ -141,6 +141,22 @@ export function Dashboard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ movieTitle, status: "REMOVED" }),
+    });
+  };
+
+  const handleMarkAsWatched = async (movieTitle: string) => {
+    // Update local state immediately
+    setMovies((prev) =>
+      prev.map((m) =>
+        m.movieTitle === movieTitle ? { ...m, status: "WATCHED" } : m
+      )
+    );
+
+    // Update in database
+    await fetch("/api/user-movies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieTitle, status: "WATCHED" }),
     });
   };
 
@@ -201,7 +217,7 @@ export function Dashboard({
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleMarkAsWatched(rec);
+                        handleMarkRecommendationAsWatched(rec);
                       }}
                       size="sm"
                       className="w-full text-xs h-7"
@@ -249,6 +265,7 @@ export function Dashboard({
                 title={movie.movieTitle}
                 initialData={movie}
                 onRemove={() => handleRemove(movie.movieTitle)}
+                onMarkAsWatched={() => handleMarkAsWatched(movie.movieTitle)}
               />
             ))}
           </div>

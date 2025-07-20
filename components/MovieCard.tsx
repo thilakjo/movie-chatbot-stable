@@ -9,6 +9,7 @@ interface MovieCardProps {
   title: string;
   initialData?: MovieWithDetails;
   onRemove?: () => void;
+  onMarkAsWatched?: () => void;
   children?: React.ReactNode;
 }
 
@@ -16,6 +17,7 @@ export function MovieCard({
   title,
   initialData,
   onRemove,
+  onMarkAsWatched,
   children,
 }: MovieCardProps) {
   const [details, setDetails] = useState<MovieWithDetails | null>(
@@ -95,19 +97,33 @@ export function MovieCard({
               </p>
             </div>
           </div>
-          {onRemove && (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove();
-              }}
-              variant="destructive"
-              size="sm"
-              className="w-full"
-            >
-              Remove
-            </Button>
-          )}
+          <div className="space-y-2">
+            {onMarkAsWatched && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkAsWatched();
+                }}
+                size="sm"
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                Watched It
+              </Button>
+            )}
+            {onRemove && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove();
+                }}
+                variant="destructive"
+                size="sm"
+                className="w-full"
+              >
+                Remove
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

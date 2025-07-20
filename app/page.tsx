@@ -24,8 +24,10 @@ const OnboardingFlow = ({ user }: { user: any }) => {
       return <MovieRating moviesToRate={moviesToRate} />;
     case "NEEDS_CASUAL_QUESTIONS":
       return <CasualQuestions />;
+    case "ONBOARDING_COMPLETE":
+      return <Dashboard initialMovies={user?.movies || []} />;
     default:
-      // Fallback for returning users or completed onboarding
+      // For returning users who completed onboarding
       return <Dashboard initialMovies={user?.movies || []} />;
   }
 };
@@ -55,8 +57,6 @@ export default async function Home() {
     },
   });
 
-  const isOnboardingComplete = user?.onboardingStep === "ONBOARDING_COMPLETE";
-
   return (
     <main className="p-4 md:p-8">
       <div className="flex justify-between items-center mb-6">
@@ -66,11 +66,7 @@ export default async function Home() {
         <SignOutButton />
       </div>
 
-      {isOnboardingComplete ? (
-        <Dashboard initialMovies={user?.movies ?? []} />
-      ) : (
-        <OnboardingFlow user={user} />
-      )}
+      <OnboardingFlow user={user} />
     </main>
   );
 }

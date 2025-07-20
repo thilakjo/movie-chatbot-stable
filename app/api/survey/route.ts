@@ -98,19 +98,6 @@ export async function POST(request: Request) {
 
     const { favoriteGenre, favoriteDirector, mood } = await request.json();
 
-    // Update user preferences
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        preferences: {
-          favoriteGenre,
-          favoriteDirector,
-          mood,
-        },
-        onboardingStep: "MOVIE_RATING",
-      },
-    });
-
     // Generate personalized movie list using 3-tier system
     let movies: string[] = [];
 
@@ -195,16 +182,18 @@ export async function POST(request: Request) {
       movies = [...movies, ...additionalMovies].slice(0, 10);
     }
 
-    // Create movie entries in database
-    const movieEntries = movies.map((title, index) => ({
-      movieTitle: title,
-      status: "WATCHLIST" as const,
-      order: index,
-      userId,
-    }));
-
-    await prisma.userMovie.createMany({
-      data: movieEntries,
+    // Update user preferences and set onboarding step to NEEDS_MOVIE_RATINGS
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        preferences: {
+          favoriteGenre,
+          favoriteDirector,
+          mood,
+          dynamicMoviesToRate: movies, // Store the dynamic movies for rating
+        },
+        onboardingStep: "NEEDS_MOVIE_RATINGS", // Set to movie rating step
+      },
     });
 
     return NextResponse.json({ success: true, movies });
