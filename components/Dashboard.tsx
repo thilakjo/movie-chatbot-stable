@@ -373,15 +373,15 @@ export function Dashboard({
                   key={rec.title}
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
-                  <MovieCard
-                    title={rec.title}
-                    initialData={rec as any}
-                    onClick={() => {
-                      if (isMobile) setModalRec(rec);
-                    }}
-                  >
-                    {/* Desktop overlay */}
-                    {!isMobile && (
+                  {isMobile ? (
+                    <div
+                      onClick={() => setModalRec(rec)}
+                      className="cursor-pointer"
+                    >
+                      <MovieCard title={rec.title} initialData={rec as any} />
+                    </div>
+                  ) : (
+                    <MovieCard title={rec.title} initialData={rec as any}>
                       <Card className="w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90 group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20 transition-opacity duration-200">
                         <CardContent className="flex flex-col gap-2 p-3 sm:p-2">
                           <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
@@ -452,8 +452,8 @@ export function Dashboard({
                           </div>
                         </CardContent>
                       </Card>
-                    )}
-                  </MovieCard>
+                    </MovieCard>
+                  )}
                 </CarouselItem>
               ))}
             </CarouselContent>
