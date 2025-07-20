@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts (Production-Ready Version with Better AI Handling)
+// app/api/recommend/route.ts (Production-Ready Version with Quota Fallback)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -17,6 +17,67 @@ if (!GEMINI_API_KEY) {
 }
 
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
+// Curated fallback movies for different genres
+const FALLBACK_MOVIES = {
+  action: [
+    "Mad Max: Fury Road",
+    "John Wick",
+    "The Dark Knight",
+    "Mission: Impossible - Fallout",
+    "Die Hard",
+  ],
+  drama: [
+    "The Shawshank Redemption",
+    "Forrest Gump",
+    "The Green Mile",
+    "Schindler's List",
+    "12 Angry Men",
+  ],
+  comedy: [
+    "The Grand Budapest Hotel",
+    "Superbad",
+    "Shaun of the Dead",
+    "The Big Lebowski",
+    "Groundhog Day",
+  ],
+  thriller: [
+    "Se7en",
+    "The Silence of the Lambs",
+    "Gone Girl",
+    "Zodiac",
+    "Prisoners",
+  ],
+  sciFi: [
+    "Blade Runner 2049",
+    "Arrival",
+    "Ex Machina",
+    "Interstellar",
+    "The Martian",
+  ],
+  horror: ["Get Out", "Hereditary", "The Witch", "A Quiet Place", "It Follows"],
+  romance: [
+    "La La Land",
+    "The Notebook",
+    "500 Days of Summer",
+    "Eternal Sunshine of the Spotless Mind",
+    "Before Sunrise",
+  ],
+  adventure: [
+    "Indiana Jones and the Raiders of the Lost Ark",
+    "Jurassic Park",
+    "The Mummy",
+    "National Treasure",
+    "The Goonies",
+  ],
+  default: [
+    "The Shawshank Redemption",
+    "The Godfather",
+    "Pulp Fiction",
+    "Fight Club",
+    "Inception",
+  ],
+};
 
 // Type definitions for TMDb API responses
 interface TMDBMovieDetails {
@@ -125,23 +186,62 @@ async function getMovieDetails(title: string) {
   }
 }
 
+// Get fallback recommendations based on user preferences
+function getFallbackRecommendations(
+  preferences: any,
+  excludeTitles: Set<string>
+) {
+  const genre = preferences.favoriteGenre?.toLowerCase() || "default";
+  let movieList =
+    FALLBACK_MOVIES[genre as keyof typeof FALLBACK_MOVIES] ||
+    FALLBACK_MOVIES.default;
+
+  // Filter out movies the user already has
+  movieList = movieList.filter((movie) => !excludeTitles.has(movie));
+
+  // If we don't have enough movies, add from other genres
+  if (movieList.length < 5) {
+    const allMovies = Object.values(FALLBACK_MOVIES).flat();
+    const additionalMovies = allMovies.filter(
+      (movie) => !excludeTitles.has(movie) && !movieList.includes(movie)
+    );
+    movieList = [...movieList, ...additionalMovies].slice(0, 5);
+  }
+
+  return movieList.map((title) => ({ title }));
+}
+
 export async function POST() {
   try {
+    console.log("=== RECOMMENDATION API START ===");
+
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     if (!userId) {
+      console.log("No user session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    console.log("User ID:", userId);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { movies: true },
     });
     if (!user) {
+      console.log("User not found in database");
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    console.log("User found:", {
+      id: user.id,
+      moviesCount: user.movies.length,
+      hasPreferences: !!user.preferences,
+      hasRatings: !!user.movieRatings,
+    });
+
     // Always get user's existing movies with details first
+    console.log("Fetching user's existing movies with details...");
     const userMoviesWithDetails = await Promise.allSettled(
       user.movies.map((movie) =>
         getMovieDetails(movie.movieTitle).then((details) => ({
@@ -158,6 +258,11 @@ export async function POST() {
       )
       .map((result) => result.value)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    console.log(
+      "Successfully fetched user movies:",
+      successfulUserMovies.length
+    );
 
     const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
     if (user.movieRatings) {
@@ -204,106 +309,127 @@ export async function POST() {
     ).join(", ")}. `;
     prompt += `Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
+    console.log("Built prompt length:", prompt.length);
+
     let recommendations: { title: string }[] = [];
     let rawResponse = "";
 
     // Check if Gemini API is available
     if (!genAI) {
-      console.error("Gemini AI is not available - API key missing");
-      return NextResponse.json({
-        recommendations: [],
-        userMovies: successfulUserMovies,
-        error: "AI service is currently unavailable. Please try again later.",
-      });
-    }
-
-    try {
-      console.log(
-        "Attempting Gemini AI call with prompt:",
-        prompt.substring(0, 200) + "..."
-      );
-
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      // Add timeout for Gemini call
-      const geminiController = new AbortController();
-      const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
-
-      const result = await model.generateContent(prompt);
-      clearTimeout(geminiTimeout);
-
-      rawResponse = result.response.text();
-      console.log(
-        "Gemini raw response:",
-        rawResponse.substring(0, 200) + "..."
-      );
-
-      const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
-      if (!jsonMatch) {
-        console.error("No valid JSON array found in Gemini response");
-        throw new Error("No valid JSON array found in the AI response.");
-      }
-
-      recommendations = JSON.parse(jsonMatch[0]);
-
-      if (!Array.isArray(recommendations) || recommendations.length === 0) {
-        console.error("Gemini returned empty or invalid array");
-        throw new Error("AI returned empty or invalid data.");
-      }
-
-      // Ensure we have exactly 5 recommendations
-      if (recommendations.length > 5) {
-        recommendations = recommendations.slice(0, 5);
-      }
-
-      console.log("Successfully parsed recommendations:", recommendations);
-    } catch (e) {
-      console.error("--- GEMINI RECOMMENDATION ERROR ---");
-      console.error("Failed to get or parse recommendations from Gemini.");
-      console.error("Raw AI Response:", rawResponse);
-      console.error("Parsing Error:", e);
-      console.error("User preferences:", preferences);
-      console.error("---------------------------------");
-
-      // Try a simpler fallback approach
+      console.log("Gemini AI not available - using fallback");
+      recommendations = getFallbackRecommendations(preferences, excludeTitles);
+    } else {
       try {
-        console.log("Attempting fallback recommendation generation...");
-        const fallbackPrompt = `Recommend 5 popular movies that are critically acclaimed. Return ONLY a valid JSON array of objects with "title" key. Example: [{"title": "The Shawshank Redemption"}]`;
+        console.log("Attempting Gemini AI call...");
 
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const fallbackResult = await model.generateContent(fallbackPrompt);
-        const fallbackResponse = fallbackResult.response.text();
 
-        const fallbackJsonMatch = fallbackResponse.match(
-          /\[\s*\{[\s\S]*\}\s*\]/
+        // Add timeout for Gemini call
+        const geminiController = new AbortController();
+        const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
+
+        console.log("Sending prompt to Gemini...");
+        const result = await model.generateContent(prompt);
+        clearTimeout(geminiTimeout);
+
+        rawResponse = result.response.text();
+        console.log("Gemini raw response length:", rawResponse.length);
+        console.log(
+          "Gemini raw response preview:",
+          rawResponse.substring(0, 200) + "..."
         );
-        if (fallbackJsonMatch) {
-          recommendations = JSON.parse(fallbackJsonMatch[0]);
-          if (Array.isArray(recommendations) && recommendations.length > 0) {
-            console.log(
-              "Fallback recommendations successful:",
-              recommendations
-            );
-            // Continue with fallback recommendations
-          } else {
-            throw new Error("Fallback also failed");
-          }
-        } else {
-          throw new Error("Fallback also failed");
+
+        const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (!jsonMatch) {
+          console.error("No valid JSON array found in Gemini response");
+          throw new Error("No valid JSON array found in the AI response.");
         }
-      } catch (fallbackError) {
-        console.error("Fallback recommendation also failed:", fallbackError);
-        // Return user's existing movies even when AI fails
-        return NextResponse.json({
-          recommendations: [],
-          userMovies: successfulUserMovies,
-          error:
-            "Unable to generate recommendations at this time. Please try again later.",
-        });
+
+        recommendations = JSON.parse(jsonMatch[0]);
+
+        if (!Array.isArray(recommendations) || recommendations.length === 0) {
+          console.error("Gemini returned empty or invalid array");
+          throw new Error("AI returned empty or invalid data.");
+        }
+
+        // Ensure we have exactly 5 recommendations
+        if (recommendations.length > 5) {
+          recommendations = recommendations.slice(0, 5);
+        }
+
+        console.log("Successfully parsed recommendations:", recommendations);
+      } catch (e: any) {
+        console.error("--- GEMINI RECOMMENDATION ERROR ---");
+        console.error("Failed to get or parse recommendations from Gemini.");
+        console.error("Raw AI Response:", rawResponse);
+        console.error("Parsing Error:", e);
+        console.error("User preferences:", preferences);
+        console.error("---------------------------------");
+
+        // Check if it's a quota error
+        if (
+          (e.message && e.message.includes("quota")) ||
+          e.message.includes("429")
+        ) {
+          console.log("Quota exceeded - using fallback recommendations");
+          recommendations = getFallbackRecommendations(
+            preferences,
+            excludeTitles
+          );
+        } else {
+          // Try a simpler fallback approach
+          try {
+            console.log("Attempting fallback recommendation generation...");
+            const fallbackPrompt = `Recommend 5 popular movies that are critically acclaimed. Return ONLY a valid JSON array of objects with "title" key. Example: [{"title": "The Shawshank Redemption"}]`;
+
+            const model = genAI.getGenerativeModel({
+              model: "gemini-1.5-flash",
+            });
+            const fallbackResult = await model.generateContent(fallbackPrompt);
+            const fallbackResponse = fallbackResult.response.text();
+
+            console.log(
+              "Fallback response:",
+              fallbackResponse.substring(0, 200) + "..."
+            );
+
+            const fallbackJsonMatch = fallbackResponse.match(
+              /\[\s*\{[\s\S]*\}\s*\]/
+            );
+            if (fallbackJsonMatch) {
+              recommendations = JSON.parse(fallbackJsonMatch[0]);
+              if (
+                Array.isArray(recommendations) &&
+                recommendations.length > 0
+              ) {
+                console.log(
+                  "Fallback recommendations successful:",
+                  recommendations
+                );
+                // Continue with fallback recommendations
+              } else {
+                throw new Error("Fallback also failed");
+              }
+            } else {
+              throw new Error("Fallback also failed");
+            }
+          } catch (fallbackError) {
+            console.error(
+              "Fallback recommendation also failed:",
+              fallbackError
+            );
+            console.log("Using curated fallback recommendations");
+            recommendations = getFallbackRecommendations(
+              preferences,
+              excludeTitles
+            );
+          }
+        }
       }
     }
 
     // Fetch movie details with better error handling
+    console.log("Fetching movie details for recommendations...");
     const recsWithDetails = await Promise.allSettled(
       recommendations.map((rec) =>
         getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
@@ -318,6 +444,7 @@ export async function POST() {
       .map((result) => result.value);
 
     console.log("Returning successful recommendations:", successfulRecs.length);
+    console.log("=== RECOMMENDATION API END ===");
 
     return NextResponse.json({
       recommendations: successfulRecs,

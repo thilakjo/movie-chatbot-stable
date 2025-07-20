@@ -1,4 +1,4 @@
-// app/api/survey/route.ts (Improved Version with Better AI Handling)
+// app/api/survey/route.ts
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -7,125 +7,124 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const prisma = new PrismaClient();
-const FALLBACK_MOVIES = [
+
+// Curated fallback movies for survey
+const SURVEY_FALLBACK_MOVIES = [
+  "The Shawshank Redemption",
+  "The Godfather",
+  "Pulp Fiction",
+  "Fight Club",
   "Inception",
   "The Dark Knight",
-  "Pulp Fiction",
   "Forrest Gump",
   "The Matrix",
-  "Interstellar",
-  "Parasite",
-  "Gladiator",
-  "The Departed",
-  "Whiplash",
+  "Goodfellas",
+  "The Silence of the Lambs",
 ];
 
-// Validate Gemini API key
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY is not set in environment variables");
-}
-
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function POST(request: Request) {
   try {
-    const preferences = await req.json();
-    let dynamicMovies: string[] = [];
-
-    // Check if Gemini API is available
-    if (!genAI) {
-      console.error("Gemini AI is not available - API key missing");
-      dynamicMovies = FALLBACK_MOVIES;
-    } else {
-      try {
-        // Create a more detailed prompt for better movie selection
-        const prompt = `Based on a user's preferences:
-- Favorite Genre: "${preferences.favoriteGenre}"
-- Favorite Director: "${preferences.favoriteDirector}"
-- Current Mood: "${preferences.mood}"
-
-Generate a list of 10 well-known movies that would appeal to this user. Consider:
-1. Movies in their favorite genre
-2. Movies by their favorite director or similar directors
-3. Movies that match their current mood
-4. A mix of classic and modern films
-5. Movies that are critically acclaimed and popular
-
-Return ONLY a valid JSON array of movie titles as strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
-
-        console.log(
-          "Attempting Gemini AI call for survey with prompt:",
-          prompt.substring(0, 200) + "..."
-        );
-
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-        // Add timeout for Gemini call
-        const geminiController = new AbortController();
-        const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
-
-        const result = await model.generateContent(prompt);
-        clearTimeout(geminiTimeout);
-
-        const text = result.response.text();
-        console.log("Gemini survey response:", text.substring(0, 200) + "...");
-
-        // Clean the response and parse JSON
-        const cleanedText = text.replace(/```json|```/g, "").trim();
-        dynamicMovies = JSON.parse(cleanedText);
-
-        if (!Array.isArray(dynamicMovies) || dynamicMovies.length === 0) {
-          throw new Error("Gemini did not return a valid movie list.");
-        }
-
-        // Ensure we have exactly 10 movies
-        if (dynamicMovies.length > 10) {
-          dynamicMovies = dynamicMovies.slice(0, 10);
-        } else if (dynamicMovies.length < 10) {
-          // Add some fallback movies if we don't have enough
-          const remaining = 10 - dynamicMovies.length;
-          const fallbackToAdd = FALLBACK_MOVIES.slice(0, remaining);
-          dynamicMovies = [...dynamicMovies, ...fallbackToAdd];
-        }
-
-        console.log("Generated dynamic movies:", dynamicMovies);
-      } catch (e) {
-        console.error(
-          "Gemini call for dynamic movie list failed, using fallback. Error:",
-          e
-        );
-        dynamicMovies = FALLBACK_MOVIES;
-      }
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Save preferences and dynamic movies
+    const { favoriteGenre, favoriteDirector, mood } = await request.json();
+
+    // Update user preferences
     await prisma.user.update({
       where: { id: userId },
       data: {
         preferences: {
-          ...preferences,
-          dynamicMoviesToRate: dynamicMovies,
+          favoriteGenre,
+          favoriteDirector,
+          mood,
         },
-        onboardingStep: "NEEDS_MOVIE_RATINGS",
+        onboardingStep: "MOVIE_RATING",
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      dynamicMovies: dynamicMovies,
+    // Generate personalized movie list using Gemini AI
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    let movies: string[] = [];
+
+    if (GEMINI_API_KEY) {
+      try {
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `Based on these preferences, recommend 10 movies:
+        - Favorite Genre: ${favoriteGenre}
+        - Favorite Director: ${favoriteDirector}
+        - Mood: ${mood}
+        
+        Return ONLY a valid JSON array of movie titles. Example: ["The Shawshank Redemption", "Pulp Fiction"]`;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response.text();
+
+        // Try to parse JSON response
+        const jsonMatch = response.match(
+          /\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/
+        );
+        if (jsonMatch) {
+          movies = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("Invalid JSON response from AI");
+        }
+      } catch (error: any) {
+        console.error("Gemini AI failed:", error);
+
+        // Check if it's a quota error
+        if (
+          error.message &&
+          (error.message.includes("quota") || error.message.includes("429"))
+        ) {
+          console.log("Quota exceeded - using fallback movies");
+          movies = SURVEY_FALLBACK_MOVIES;
+        } else {
+          // Use fallback movies for any other error
+          movies = SURVEY_FALLBACK_MOVIES;
+        }
+      }
+    } else {
+      // No API key - use fallback
+      movies = SURVEY_FALLBACK_MOVIES;
+    }
+
+    // Ensure we have exactly 10 movies
+    if (movies.length > 10) {
+      movies = movies.slice(0, 10);
+    } else if (movies.length < 10) {
+      // Add more fallback movies if needed
+      const additionalMovies = [
+        "The Green Mile",
+        "Schindler's List",
+        "12 Angry Men",
+        "The Departed",
+        "The Prestige",
+      ];
+      movies = [...movies, ...additionalMovies].slice(0, 10);
+    }
+
+    // Create movie entries in database
+    const movieEntries = movies.map((title, index) => ({
+      movieTitle: title,
+      status: "WATCHLIST" as const,
+      order: index,
+      userId,
+    }));
+
+    await prisma.userMovie.createMany({
+      data: movieEntries,
     });
+
+    return NextResponse.json({ success: true, movies });
   } catch (error) {
-    console.error("Error in survey API:", error);
+    console.error("Survey API error:", error);
     return NextResponse.json(
-      { error: "Failed to save preferences" },
+      { error: "Failed to process survey" },
       { status: 500 }
     );
   }
