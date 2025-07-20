@@ -5,36 +5,99 @@ import { NextResponse } from "next/server";
 
 const prisma = new PrismaClient();
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const FALLBACK_POSTER = "/fallback-poster.svg";
 
-// (This helper function should be identical to the one in tmdb/route.ts)
+// Type definitions for TMDb API responses
+interface TMDBMovieDetails {
+  vote_average?: number;
+}
+
+interface TMDBCredits {
+  crew?: Array<{ job: string; name: string }>;
+  cast?: Array<{ name: string }>;
+}
+
+// Improved movie details fetching with better error handling
 async function getMovieDetails(title: string) {
-  if (!TMDB_API_KEY) return {};
+  const fallbackResult = {
+    posterUrl: FALLBACK_POSTER,
+    year: null,
+    director: null,
+    imdbRating: null,
+    leadActor: null,
+  };
+
+  if (!TMDB_API_KEY) {
+    return fallbackResult;
+  }
+
   try {
+    // Search for the movie
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
       title
     )}`;
+
+    const searchController = new AbortController();
+    const searchTimeout = setTimeout(() => searchController.abort(), 8000);
+
     const searchRes = await fetch(searchUrl, {
-      signal: AbortSignal.timeout(10000), // Increased timeout
+      signal: searchController.signal,
     });
+    clearTimeout(searchTimeout);
+
+    if (!searchRes.ok) {
+      console.log(`TMDb search failed for "${title}": ${searchRes.status}`);
+      return fallbackResult;
+    }
+
     const searchData = await searchRes.json();
-    if (!searchData.results || searchData.results.length === 0) return {};
+    if (!searchData.results || searchData.results.length === 0) {
+      console.log(`No TMDb results found for "${title}"`);
+      return fallbackResult;
+    }
 
     const movie = searchData.results[0];
     const movieId = movie.id;
-    const detailsUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_API_KEY}`;
-    const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
 
-    const [detailsRes, creditsRes] = await Promise.all([
-      fetch(detailsUrl, { signal: AbortSignal.timeout(10000) }),
-      fetch(creditsUrl, { signal: AbortSignal.timeout(10000) }),
+    // Fetch details and credits in parallel with individual timeouts
+    const detailsController = new AbortController();
+    const creditsController = new AbortController();
+    const detailsTimeout = setTimeout(() => detailsController.abort(), 8000);
+    const creditsTimeout = setTimeout(() => creditsController.abort(), 8000);
+
+    const [detailsRes, creditsRes] = await Promise.allSettled([
+      fetch(
+        `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_API_KEY}`,
+        {
+          signal: detailsController.signal,
+        }
+      ),
+      fetch(
+        `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`,
+        {
+          signal: creditsController.signal,
+        }
+      ),
     ]);
-    const detailsData = await detailsRes.json();
-    const creditsData = await creditsRes.json();
+
+    clearTimeout(detailsTimeout);
+    clearTimeout(creditsTimeout);
+
+    let detailsData: TMDBMovieDetails = {};
+    let creditsData: TMDBCredits = {};
+
+    if (detailsRes.status === "fulfilled" && detailsRes.value.ok) {
+      detailsData = await detailsRes.value.json();
+    }
+
+    if (creditsRes.status === "fulfilled" && creditsRes.value.ok) {
+      creditsData = await creditsRes.value.json();
+    }
 
     return {
       posterUrl: movie.poster_path
         ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-        : null,
+        : FALLBACK_POSTER,
       year: movie.release_date
         ? parseInt(movie.release_date.split("-")[0])
         : null,
@@ -42,12 +105,12 @@ async function getMovieDetails(title: string) {
         ? detailsData.vote_average.toFixed(1)
         : null,
       director:
-        creditsData.crew?.find((p: any) => p.job === "Director")?.name || null,
+        creditsData.crew?.find((p) => p.job === "Director")?.name || null,
       leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch (error) {
     console.error(`Error fetching movie details for "${title}":`, error);
-    return {};
+    return fallbackResult;
   }
 }
 
@@ -55,8 +118,9 @@ export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
-    if (!userId)
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const movies = await prisma.userMovie.findMany({
       where: { userId },
@@ -77,8 +141,9 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
-    if (!userId)
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const { movieTitle, status, feedback } = await req.json();
 

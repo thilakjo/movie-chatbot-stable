@@ -52,18 +52,26 @@ export function Dashboard({
     setRecommendations([]); // Clear old recommendations
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to fetch recommendations.");
-      }
       const data = await res.json();
-      setMovies(
-        data.userMovies.sort(
-          (a: MovieWithDetails, b: MovieWithDetails) =>
-            (a.order ?? 0) - (b.order ?? 0)
-        ) || []
-      );
-      setRecommendations(data.recommendations || []);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch recommendations.");
+      }
+
+      // Handle the new response format
+      if (data.error) {
+        setError(data.error);
+        setRecommendations([]);
+        setMovies(data.userMovies || []);
+      } else {
+        setMovies(
+          data.userMovies.sort(
+            (a: MovieWithDetails, b: MovieWithDetails) =>
+              (a.order ?? 0) - (b.order ?? 0)
+          ) || []
+        );
+        setRecommendations(data.recommendations || []);
+      }
     } catch (error: any) {
       console.error("Recommendation error:", error);
       setError(
