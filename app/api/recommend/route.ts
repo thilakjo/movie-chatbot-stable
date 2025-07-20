@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts (Final, Robust Version)
+// app/api/recommend/route.ts (Final, Most Robust Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -26,9 +26,15 @@ async function getMovieDetails(title: string) {
     )}`;
     const searchRes = await fetch(searchUrl, {
       signal: AbortSignal.timeout(5000),
-    }); // 5 second timeout
+    });
     if (!searchRes.ok)
-      throw new Error(`TMDb search failed with status: ${searchRes.status}`);
+      return {
+        posterUrl: FALLBACK_POSTER,
+        year: null,
+        director: null,
+        imdbRating: null,
+        leadActor: null,
+      };
 
     const searchData = await searchRes.json();
     if (!searchData.results || searchData.results.length === 0)
@@ -67,8 +73,6 @@ async function getMovieDetails(title: string) {
       leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch (error) {
-    console.error(`TMDb fetch failed for "${title}":`, error);
-    // Return fallback data but don't crash the whole process
     return {
       posterUrl: FALLBACK_POSTER,
       year: null,
@@ -106,24 +110,39 @@ export async function POST() {
     excludeTitles
   ).join(
     ", "
-  )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a JSON array of objects, with a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
+  )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
   let recommendations: { title: string }[] = [];
+  let rawResponse = ""; // Variable to store the raw AI response
+
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
-    const cleanedText = result.response
-      .text()
-      .replace(/```json|```/g, "")
-      .trim();
-    recommendations = JSON.parse(cleanedText);
+    rawResponse = result.response.text(); // Store the raw text
+
+    // A more robust way to find and parse the JSON block
+    const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (!jsonMatch) {
+      throw new Error("No valid JSON array found in the AI response.");
+    }
+
+    recommendations = JSON.parse(jsonMatch[0]);
+
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
-      throw new Error("AI returned invalid data");
+      throw new Error("AI returned empty or invalid data.");
     }
   } catch (e) {
-    console.error("Failed to get valid recommendations from Gemini:", e);
+    // This new log is crucial for debugging
+    console.error("--- GEMINI RECOMMENDATION ERROR ---");
+    console.error("Failed to get or parse recommendations from Gemini.");
+    console.error("Raw AI Response:", rawResponse); // Log the exact response
+    console.error("Parsing Error:", e);
+    console.error("---------------------------------");
     return NextResponse.json(
-      { error: "Could not get recommendations from the AI. Please try again." },
+      {
+        error:
+          "Could not get recommendations from the AI. Please check the logs.",
+      },
       { status: 500 }
     );
   }
