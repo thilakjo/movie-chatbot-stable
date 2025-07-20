@@ -1,5 +1,5 @@
 // app/page.tsx (Unified Onboarding Flow)
-
+"use client";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
