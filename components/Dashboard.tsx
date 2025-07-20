@@ -17,7 +17,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { LoadingAnimation } from "./LoadingAnimation";
-import { MovieWithDetails, Recommendation } from "@/lib/types";
+import { MovieWithDetails } from "@/lib/types";
+
+// Local Recommendation type for dashboard
+type Recommendation = {
+  title: string;
+  posterUrl?: string;
+  year?: number;
+  director?: string;
+  imdbRating?: string;
+  leadActor?: string;
+  explanation?: string;
+};
 
 const FEEDBACK_QUESTIONS = [
   { q: "How was the pacing?", o: ["Too slow", "Just right", "Too fast"] },
@@ -28,6 +39,160 @@ const FEEDBACK_QUESTIONS = [
   { q: "Would you recommend this?", o: ["Yes", "Maybe", "No"] },
 ];
 const ITEMS_PER_PAGE = 8;
+
+// 5-star rating widget for feedback
+function StarRating({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-row gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+          className={`text-xl transition-colors ${
+            star <= value ? "text-yellow-400" : "text-gray-300"
+          }`}
+          onClick={() => onChange(star)}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Wrapper for watched card to use hooks
+function WatchedCardWrapper({
+  movie,
+  onRemove,
+}: {
+  movie: any;
+  onRemove: () => void;
+}) {
+  const [star, setStar] = useState<number>(movie.rating || 0);
+  const [review, setReview] = useState<string>("");
+  const [submitted, setSubmitted] = useState(false);
+  return (
+    <MovieCard
+      key={movie.id}
+      title={movie.movieTitle}
+      initialData={movie}
+      onRemove={onRemove}
+      isFlippable
+      backContent={
+        <div className="flex flex-col h-full justify-between">
+          <div>
+            <h4 className="font-bold text-base mb-2">{movie.movieTitle}</h4>
+            <div className="text-xs space-y-1 mb-2">
+              <p>
+                <strong>Year:</strong> {movie.year || "N/A"}
+              </p>
+              <p>
+                <strong>Director:</strong> {movie.director || "N/A"}
+              </p>
+              <p>
+                <strong>Starring:</strong> {movie.leadActor || "N/A"}
+              </p>
+              <p>
+                <strong>IMDb:</strong> {movie.imdbRating || "N/A"}
+              </p>
+            </div>
+            <div className="mb-2">
+              <span className="font-semibold">Your Rating:</span>
+              <StarRating value={star} onChange={setStar} />
+            </div>
+            <textarea
+              className="w-full border rounded p-1 text-xs"
+              placeholder="Write a short review..."
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <Button
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSubmitted(true);
+              await fetch("/api/user-movies", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  movieTitle: movie.movieTitle,
+                  status: "WATCHED",
+                  feedback: { rating: star, review },
+                }),
+              });
+            }}
+            size="sm"
+            className="w-full mt-2"
+            disabled={submitted || !star}
+          >
+            {submitted ? "Saved!" : "Save Review"}
+          </Button>
+        </div>
+      }
+    />
+  );
+}
+
+// Wrapper for watchlist card to use hooks
+function WatchlistCardWrapper({
+  movie,
+  onRemove,
+  onMarkAsWatched,
+}: {
+  movie: any;
+  onRemove: () => void;
+  onMarkAsWatched: () => void;
+}) {
+  return (
+    <MovieCard
+      key={movie.id}
+      title={movie.movieTitle}
+      initialData={movie}
+      onRemove={onRemove}
+      onMarkAsWatched={onMarkAsWatched}
+      isFlippable
+      backContent={
+        <div className="flex flex-col h-full justify-between">
+          <div>
+            <h4 className="font-bold text-base mb-2">{movie.movieTitle}</h4>
+            <div className="text-xs space-y-1 mb-2">
+              <p>
+                <strong>Year:</strong> {movie.year || "N/A"}
+              </p>
+              <p>
+                <strong>Director:</strong> {movie.director || "N/A"}
+              </p>
+              <p>
+                <strong>Starring:</strong> {movie.leadActor || "N/A"}
+              </p>
+              <p>
+                <strong>IMDb:</strong> {movie.imdbRating || "N/A"}
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkAsWatched();
+            }}
+            size="sm"
+            className="w-full bg-green-600 hover:bg-green-700 mt-2"
+          >
+            Move to Watched
+          </Button>
+        </div>
+      }
+    />
+  );
+}
 
 export function Dashboard({
   initialMovies,
@@ -96,7 +261,7 @@ export function Dashboard({
 
   const handleListAction = async (
     title: string,
-    status: "WATCHLIST" | "WATCHED" | "DISMISSED",
+    status: "WATCHLIST" | "WATCHED" | "DISMISSED" | "LIKED",
     feedbackPayload?: any
   ) => {
     setRecommendations((prev) => prev.filter((m) => m.title !== title));
@@ -204,6 +369,28 @@ export function Dashboard({
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
                   <MovieCard title={rec.title} initialData={rec as any}>
+                    {/* AI Explanation */}
+                    {rec.explanation && (
+                      <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
+                        {rec.explanation}
+                      </div>
+                    )}
+                    {/* Like Button */}
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleListAction(rec.title, "LIKED"); // Save as like (implement in backend)
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs h-7 flex items-center justify-center gap-1"
+                    >
+                      <span role="img" aria-label="Like">
+                        ❤️
+                      </span>{" "}
+                      Like
+                    </Button>
+                    {/* Add to Watchlist */}
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -214,6 +401,7 @@ export function Dashboard({
                     >
                       Watchlist
                     </Button>
+                    {/* Mark as Watched */}
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -224,6 +412,7 @@ export function Dashboard({
                     >
                       Watched
                     </Button>
+                    {/* Dismiss */}
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -260,10 +449,9 @@ export function Dashboard({
               ? watchlist
               : watchlist.slice(0, ITEMS_PER_PAGE)
             ).map((movie) => (
-              <MovieCard
+              <WatchlistCardWrapper
                 key={movie.id}
-                title={movie.movieTitle}
-                initialData={movie}
+                movie={movie}
                 onRemove={() => handleRemove(movie.movieTitle)}
                 onMarkAsWatched={() => handleMarkAsWatched(movie.movieTitle)}
               />
@@ -287,10 +475,9 @@ export function Dashboard({
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
             {(showAll.watched ? watched : watched.slice(0, ITEMS_PER_PAGE)).map(
               (movie) => (
-                <MovieCard
+                <WatchedCardWrapper
                   key={movie.id}
-                  title={movie.movieTitle}
-                  initialData={movie}
+                  movie={movie}
                   onRemove={() => handleRemove(movie.movieTitle)}
                 />
               )

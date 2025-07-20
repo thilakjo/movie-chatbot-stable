@@ -11,6 +11,8 @@ interface MovieCardProps {
   onRemove?: () => void;
   onMarkAsWatched?: () => void;
   children?: React.ReactNode;
+  isFlippable?: boolean;
+  backContent?: React.ReactNode;
 }
 
 export function MovieCard({

@@ -154,6 +154,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true });
     }
 
+    // Handle LIKE action: update movieRatings or likedMovies
+    if (status === "LIKED") {
+      // Add to movieRatings as 5 stars (or add to likedMovies array if you prefer)
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      let movieRatings = (user?.movieRatings as any) || {};
+      movieRatings[movieTitle] = 5;
+      await prisma.user.update({
+        where: { id: userId },
+        data: { movieRatings },
+      });
+      return NextResponse.json({ success: true });
+    }
+
     const details = await getMovieDetails(movieTitle);
 
     await prisma.userMovie.upsert({

@@ -1,36 +1,40 @@
-// app/page.tsx (Fixed Version)
+// app/page.tsx (Unified Onboarding Flow)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { SignInButton } from "@/components/SignInButton";
 import { SignOutButton } from "@/components/SignOutButton";
-import { Survey } from "@/components/Survey";
 import { Dashboard } from "@/components/Dashboard";
 import { MovieRating } from "@/components/MovieRating";
-import { CasualQuestions } from "@/components/CasualQuestions";
+import { OnboardingSurvey } from "@/components/OnboardingSurvey";
+import { useState } from "react";
 
 const prisma = new PrismaClient();
 
-const OnboardingFlow = ({ user }: { user: any }) => {
-  switch (user?.onboardingStep) {
-    case "NEEDS_INITIAL_SURVEY":
-      return <Survey />;
-    case "NEEDS_MOVIE_RATINGS":
-      // Extract the dynamic movies from preferences
-      const preferences = (user.preferences as any) || {};
-      const moviesToRate = preferences.dynamicMoviesToRate || [];
-      console.log("Movies to rate:", moviesToRate);
-      return <MovieRating moviesToRate={moviesToRate} />;
-    case "NEEDS_CASUAL_QUESTIONS":
-      return <CasualQuestions />;
-    case "ONBOARDING_COMPLETE":
-      return <Dashboard initialMovies={user?.movies || []} />;
-    default:
-      // For returning users who completed onboarding
-      return <Dashboard initialMovies={user?.movies || []} />;
+function OnboardingFlow({ user }: { user: any }) {
+  // Client-side state for onboarding
+  const [moviesToRate, setMoviesToRate] = useState<string[] | null>(null);
+
+  if (user?.onboardingStep === "NEEDS_INITIAL_SURVEY") {
+    // Show the unified onboarding survey
+    return (
+      <OnboardingSurvey
+        onMoviesGenerated={(movies) => setMoviesToRate(movies)}
+      />
+    );
   }
-};
+
+  if (user?.onboardingStep === "NEEDS_MOVIE_RATINGS" || moviesToRate) {
+    // Show the 5-star movie rating UI for the generated movies
+    const preferences = (user.preferences as any) || {};
+    const movies = moviesToRate || preferences.dynamicMoviesToRate || [];
+    return <MovieRating moviesToRate={movies} />;
+  }
+
+  // Onboarding complete or returning user
+  return <Dashboard initialMovies={user?.movies || []} />;
+}
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

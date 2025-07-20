@@ -1,4 +1,4 @@
-// app/api/rate-movies/route.ts (Improved Version)
+// app/api/rate-movies/route.ts (5-Star Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -25,13 +25,20 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("Saving movie ratings for user:", userId, "Ratings:", ratings);
+    // Accept 5-star ratings (number or string)
+    // Example: { "Inception": 5, "The Matrix": 4, ... }
+    console.log(
+      "Saving 5-star movie ratings for user:",
+      userId,
+      "Ratings:",
+      ratings
+    );
 
     await prisma.user.update({
       where: { id: userId },
       data: {
         movieRatings: ratings,
-        onboardingStep: "NEEDS_CASUAL_QUESTIONS", // Advance to the next step
+        onboardingStep: "ONBOARDING_COMPLETE", // Onboarding is now complete
       },
     });
 

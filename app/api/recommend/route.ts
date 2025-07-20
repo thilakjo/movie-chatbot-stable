@@ -267,6 +267,40 @@ async function tryOpenAIRecommendations(
   }
 }
 
+// --- AI Explanation for Each Recommendation ---
+async function getAIExplanation(
+  movieTitle: string,
+  userProfile: any,
+  genAI: any,
+  openai: any
+) {
+  const basePrompt = `You are a movie recommendation expert. Explain in 1-2 sentences why you are recommending the movie '${movieTitle}' to this user, based on their preferences: ${JSON.stringify(
+    userProfile
+  )}`;
+  if (genAI) {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(basePrompt);
+      return result.response.text().replace(/^\s+|\s+$/g, "");
+    } catch {}
+  }
+  if (openai) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { role: "system", content: "You are a movie recommendation expert." },
+          { role: "user", content: basePrompt },
+        ],
+        max_tokens: 100,
+        temperature: 0.7,
+      });
+      return completion.choices[0]?.message?.content?.trim() || "";
+    } catch {}
+  }
+  return "Recommended based on your taste profile.";
+}
+
 export async function POST() {
   try {
     console.log("=== RECOMMENDATION API START (3-Tier Fallback) ===");
@@ -515,11 +549,27 @@ export async function POST() {
       )
       .map((result) => result.value);
 
-    console.log("Returning successful recommendations:", successfulRecs.length);
+    // Add explanations in parallel
+    const recsWithExplanations = await Promise.all(
+      successfulRecs.map(async (rec) => {
+        const explanation = await getAIExplanation(
+          rec.title,
+          preferences,
+          genAI,
+          openai
+        );
+        return { ...rec, explanation };
+      })
+    );
+
+    console.log(
+      "Returning successful recommendations:",
+      recsWithExplanations.length
+    );
     console.log("=== RECOMMENDATION API END ===");
 
     return NextResponse.json({
-      recommendations: successfulRecs,
+      recommendations: recsWithExplanations,
       userMovies: successfulUserMovies,
     });
   } catch (error) {
