@@ -54,6 +54,16 @@ export function MovieRating({ moviesToRate, onComplete }: MovieRatingProps) {
   const [submitted, setSubmitted] = useState(false);
   const router = useRouter();
 
+  // Auto-refresh after submission (fix hooks error)
+  useEffect(() => {
+    if (submitted) {
+      const timeout = setTimeout(() => {
+        window.location.reload();
+      }, 2500);
+      return () => clearTimeout(timeout);
+    }
+  }, [submitted]);
+
   const handleRatingChange = (movie: string, rating: number) => {
     setRatings((prev) => ({ ...prev, [movie]: rating }));
     setNotWatched((prev) => ({ ...prev, [movie]: false }));
@@ -97,12 +107,6 @@ export function MovieRating({ moviesToRate, onComplete }: MovieRatingProps) {
   };
 
   if (submitted) {
-    useEffect(() => {
-      const timeout = setTimeout(() => {
-        window.location.reload();
-      }, 2500);
-      return () => clearTimeout(timeout);
-    }, []);
     return (
       <Card className="max-w-2xl mx-auto animate-fadeIn">
         <CardHeader>
