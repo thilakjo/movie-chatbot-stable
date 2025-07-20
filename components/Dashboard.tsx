@@ -19,8 +19,8 @@ import {
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MovieWithDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { Heart, Bookmark, Eye, X, Search } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Bookmark, Eye, X, Search } from "lucide-react";
+// Like button and animation removed
 
 // Local Recommendation type for dashboard
 type Recommendation = {
@@ -215,8 +215,7 @@ export function Dashboard({
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [modalRec, setModalRec] = useState<Recommendation | null>(null);
-  const [likedRecs, setLikedRecs] = useState<Set<string>>(new Set());
-  const [justLiked, setJustLiked] = useState<string | null>(null);
+  // Like button and animation removed
 
   // This function now handles errors gracefully and preserves existing movies
   const fetchAllData = async () => {
@@ -337,16 +336,7 @@ export function Dashboard({
     });
   };
 
-  const handleLike = (title: string) => {
-    setLikedRecs((prev) => new Set(prev).add(title));
-    handleListAction(title, "LIKED");
-    // Optionally, also mark as watched
-    handleListAction(title, "WATCHED");
-    setJustLiked(title);
-    setTimeout(() => {
-      setJustLiked((curr) => (curr === title ? null : curr));
-    }, 800);
-  };
+  // Like button and animation removed
 
   const watchlist = movies.filter((m) => m.status === "WATCHLIST");
   const watched = movies.filter((m) => m.status === "WATCHED");
@@ -397,37 +387,13 @@ export function Dashboard({
                       className="cursor-pointer relative"
                     >
                       <MovieCard title={rec.title} initialData={rec as any} />
-                      {/* Heart animation overlay if just liked */}
-                      <AnimatePresence>
-                        {justLiked === rec.title && (
-                          <motion.div
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1.3, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{
-                              type: "spring",
-                              stiffness: 400,
-                              damping: 20,
-                            }}
-                            className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"
-                          >
-                            <Heart
-                              className="w-20 h-20 text-red-500 drop-shadow-lg"
-                              fill="#ef4444"
-                            />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      {/* Like button and animation removed */}
                     </div>
                   ) : (
                     <div className="relative">
                       <MovieCard title={rec.title} initialData={rec as any}>
                         <Card
-                          className={`w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90 group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20 transition-opacity duration-200 ${
-                            likedRecs.has(rec.title)
-                              ? "ring-2 ring-red-400"
-                              : ""
-                          }`}
+                          className={`w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90 group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20 transition-opacity duration-200`}
                         >
                           <CardContent className="flex flex-col gap-2 p-3 sm:p-2">
                             <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
@@ -436,31 +402,7 @@ export function Dashboard({
                                 : `Why this movie? This is a top pick based on your preferences, ratings, and vibe check!`}
                             </div>
                             <div className="flex flex-col gap-2">
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleLike(rec.title);
-                                }}
-                                size="sm"
-                                variant={
-                                  likedRecs.has(rec.title)
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className={`w-full text-xs h-10 flex items-center justify-center gap-2 ${
-                                  likedRecs.has(rec.title)
-                                    ? "bg-red-500 text-white"
-                                    : ""
-                                }`}
-                              >
-                                <Heart
-                                  className="w-4 h-4"
-                                  fill={
-                                    likedRecs.has(rec.title) ? "#fff" : "none"
-                                  }
-                                />{" "}
-                                Like
-                              </Button>
+                              {/* Like button removed */}
                               <Button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -513,27 +455,7 @@ export function Dashboard({
                           </CardContent>
                         </Card>
                       </MovieCard>
-                      {/* Heart animation overlay if just liked */}
-                      <AnimatePresence>
-                        {justLiked === rec.title && (
-                          <motion.div
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1.3, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{
-                              type: "spring",
-                              stiffness: 400,
-                              damping: 20,
-                            }}
-                            className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"
-                          >
-                            <Heart
-                              className="w-20 h-20 text-red-500 drop-shadow-lg"
-                              fill="#ef4444"
-                            />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      {/* Like button and animation removed */}
                     </div>
                   )}
                 </CarouselItem>
@@ -567,17 +489,7 @@ export function Dashboard({
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 w-full mt-2">
-                    <Button
-                      onClick={() => {
-                        handleListAction(modalRec.title, "LIKED");
-                        setModalRec(null);
-                      }}
-                      size="lg"
-                      variant="outline"
-                      className="w-full text-base h-12 flex items-center justify-center gap-2"
-                    >
-                      <Heart className="w-5 h-5" /> Like
-                    </Button>
+                    {/* Like button removed */}
                     <Button
                       onClick={() => {
                         handleListAction(modalRec.title, "WATCHLIST");
