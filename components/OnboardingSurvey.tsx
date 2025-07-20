@@ -107,7 +107,7 @@ export function OnboardingSurvey({
     <Card className="max-w-2xl mx-auto animate-fadeIn">
       <CardHeader>
         <CardTitle className="text-2xl">
-          Let's Get to Know Your Movie Taste!
+          Let&apos;s Get to Know Your Movie Taste!
         </CardTitle>
         <CardDescription>
           Answer a few quick questions to help us personalize your
@@ -137,7 +137,9 @@ export function OnboardingSurvey({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mood">What's your current mood for a movie?</Label>
+            <Label htmlFor="mood">
+              What&apos;s your current mood for a movie?
+            </Label>
             <Input
               id="mood"
               placeholder="e.g., Something funny and lighthearted"
