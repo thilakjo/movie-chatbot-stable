@@ -1,118 +1,168 @@
-// app/api/recommend/route.ts (Corrected)
+// app/api/recommend/route.ts
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth"; // Correct import
+import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const FALLBACK_POSTER = "/fallback-poster.png";
 
-// (Keep the fetchPosterTMDb and other helper functions as they are)
-async function fetchPosterTMDb(
-  title: string,
-  TMDB_API_KEY: string
-): Promise<string | null> {
-  if (!TMDB_API_KEY) return null;
-  const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
-    title
-  )}`;
+async function getMovieDetails(title: string) {
+  if (!TMDB_API_KEY)
+    return {
+      posterUrl: FALLBACK_POSTER,
+      year: null,
+      director: null,
+      imdbRating: null,
+      leadActor: null,
+    };
   try {
-    const res = await fetch(searchUrl);
-    const data = await res.json();
-    if (
-      data.results &&
-      data.results.length > 0 &&
-      data.results[0].poster_path
-    ) {
-      return `https://image.tmdb.org/t/p/w500${data.results[0].poster_path}`;
-    }
-  } catch {}
-  return null;
+    const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
+      title
+    )}`;
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+    if (!searchData.results || searchData.results.length === 0)
+      return {
+        posterUrl: FALLBACK_POSTER,
+        year: null,
+        director: null,
+        imdbRating: null,
+        leadActor: null,
+      };
+
+    const movie = searchData.results[0];
+    const movieId = movie.id;
+    const detailsUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${TMDB_API_KEY}`;
+    const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
+
+    const [detailsRes, creditsRes] = await Promise.all([
+      fetch(detailsUrl),
+      fetch(creditsUrl),
+    ]);
+    const detailsData = await detailsRes.json();
+    const creditsData = await creditsRes.json();
+
+    return {
+      posterUrl: movie.poster_path
+        ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+        : FALLBACK_POSTER,
+      year: movie.release_date
+        ? parseInt(movie.release_date.split("-")[0])
+        : null,
+      imdbRating: detailsData.vote_average
+        ? detailsData.vote_average.toFixed(1)
+        : null,
+      director:
+        creditsData.crew?.find((p: any) => p.job === "Director")?.name || null,
+      leadActor: creditsData.cast?.[0]?.name || null,
+    };
+  } catch (error) {
+    console.error(`TMDb fetch failed for "${title}":`, error);
+    return {
+      posterUrl: FALLBACK_POSTER,
+      year: null,
+      director: null,
+      imdbRating: null,
+      leadActor: null,
+    };
+  }
 }
 
 export async function POST() {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
-  if (!userId) {
+  if (!userId)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: {
-      preferences: true,
-      movieRatings: true,
-      movies: true,
-    },
+    include: { movies: true },
   });
+  if (!user)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   interface UserMovie {
+    id: string;
+    userId: string;
     movieTitle: string;
-    [key: string]: any;
+    // Add other fields from your Prisma schema if needed
   }
 
-  interface User {
-    preferences?: Record<string, any>;
-    movieRatings?: Record<string, number>;
-    movies?: UserMovie[];
+  const excludeTitles: Set<string> = new Set(
+    (user.movies as UserMovie[]).map((m: UserMovie) => m.movieTitle)
+  );
+  if (user.movieRatings) {
+    Object.keys(user.movieRatings).forEach((title) => excludeTitles.add(title));
   }
 
-  const excludeTitles: Set<string> = new Set([
-    ...(user?.movieRatings ? Object.keys(user.movieRatings) : []),
-    ...(user?.movies?.map((m: UserMovie) => m.movieTitle) || []),
-  ]);
-
-  const prompt = `You are a movie expert AI. The user's preferences are: ${JSON.stringify(
-    user?.preferences || {}
-  )}. The user has already rated or watched these movies: ${Array.from(
+  const prompt = `You are a movie expert. A user has these preferences: ${JSON.stringify(
+    user.preferences
+  )}. They have rated these movies: ${JSON.stringify(
+    user.movieRatings
+  )}. They already have these movies on their lists: ${Array.from(
     excludeTitles
   ).join(
     ", "
-  )}. Recommend 5 new movies (not in the exclusion list) that match the user's taste. For each, return a JSON object with 'title'. Return a JSON array.`;
+  )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a JSON array of objects, with a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
-  const text = result.response.text();
-
   let recommendations: { title: string }[] = [];
   try {
-    const cleanedText = text.replace(/```json|```/g, "").trim();
+    const cleanedText = result.response
+      .text()
+      .replace(/```json|```/g, "")
+      .trim();
     recommendations = JSON.parse(cleanedText);
-  } catch {}
-
-  const filtered = recommendations.filter(
-    (rec) => rec.title && !excludeTitles.has(rec.title.trim())
-  );
-
-  const TMDB_API_KEY = process.env.TMDB_API_KEY!;
-  const withPosters = await Promise.all(
-    filtered.slice(0, 5).map(async (rec) => ({
-      title: rec.title,
-      posterUrl:
-        (await fetchPosterTMDb(rec.title, TMDB_API_KEY)) || FALLBACK_POSTER,
-    }))
-  );
-
-  interface UserMovieWithPoster extends UserMovie {
-    posterUrl: string;
+  } catch (e) {
+    console.error(
+      "Failed to parse Gemini recommendations:",
+      result.response.text()
+    );
   }
 
-  const userMoviesWithPosters: UserMovieWithPoster[] = await Promise.all(
-    (user?.movies || []).map(
-      async (m: UserMovie): Promise<UserMovieWithPoster> => ({
-        ...m,
-        posterUrl:
-          (await fetchPosterTMDb(m.movieTitle, TMDB_API_KEY)) ||
-          FALLBACK_POSTER,
-      })
+  const recsWithDetails = await Promise.all(
+    recommendations.map((rec) =>
+      getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
+    )
+  );
+  interface MovieDetails {
+    posterUrl: string;
+    year: number | null;
+    director: string | null;
+    imdbRating: string | null;
+    leadActor: string | null;
+  }
+
+  interface Recommendation {
+    title: string;
+  }
+
+  interface UserMovie {
+    id: string;
+    userId: string;
+    movieTitle: string;
+    // Add other fields from your Prisma schema if needed
+  }
+
+  type UserMovieWithDetails = UserMovie & MovieDetails;
+
+  const userMoviesWithDetails: UserMovieWithDetails[] = await Promise.all(
+    user.movies.map((movie: UserMovie) =>
+      getMovieDetails(movie.movieTitle).then((details: MovieDetails) => ({
+        ...movie,
+        ...details,
+      }))
     )
   );
 
   return NextResponse.json({
-    recommendations: withPosters,
-    userMovies: userMoviesWithPosters,
+    recommendations: recsWithDetails,
+    userMovies: userMoviesWithDetails,
   });
 }

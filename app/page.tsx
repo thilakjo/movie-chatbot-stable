@@ -1,4 +1,4 @@
-// app/page.tsx (Corrected)
+// app/page.tsx
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -8,20 +8,20 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { Survey } from "@/components/Survey";
 import { Dashboard } from "@/components/Dashboard";
 import { MovieRating } from "@/components/MovieRating";
-import { CasualQuestions } from "@/components/CasualQuestions"; // Make sure this component exists
+import { CasualQuestions } from "@/components/CasualQuestions";
 
 const prisma = new PrismaClient();
 
-const OnboardingFlow = ({ step }: { step: string | undefined }) => {
-  switch (step) {
+const OnboardingFlow = ({ user }: { user: any }) => {
+  switch (user?.onboardingStep) {
     case "NEEDS_INITIAL_SURVEY":
       return <Survey />;
     case "NEEDS_MOVIE_RATINGS":
-      return <MovieRating />;
+      const moviesToRate = (user.preferences as any)?.dynamicMoviesToRate || [];
+      return <MovieRating moviesToRate={moviesToRate} />;
     case "NEEDS_CASUAL_QUESTIONS":
       return <CasualQuestions />;
     default:
-      // Fallback for returning users or completed onboarding
       return <Dashboard initialMovies={[]} />;
   }
 };
@@ -65,7 +65,7 @@ export default async function Home() {
       {isOnboardingComplete ? (
         <Dashboard initialMovies={user?.movies ?? []} />
       ) : (
-        <OnboardingFlow step={user?.onboardingStep} />
+        <OnboardingFlow user={user} />
       )}
     </main>
   );

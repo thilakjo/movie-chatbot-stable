@@ -1,3 +1,5 @@
+// components/MovieRating.tsx
+
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,21 +14,9 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
-const moviesToRate = [
-  "The Shawshank Redemption",
-  "The Godfather",
-  "The Dark Knight",
-  "Pulp Fiction",
-  "Forrest Gump",
-  "Inception",
-  "Fight Club",
-  "The Matrix",
-  "Interstellar",
-  "The Silence of the Lambs",
-];
 type Ratings = { [key: string]: string };
 
-export function MovieRating() {
+export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
   const [ratings, setRatings] = useState<Ratings>({});
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -50,7 +40,7 @@ export function MovieRating() {
       <CardHeader>
         <CardTitle className="text-2xl">Rate Some Movies</CardTitle>
         <CardDescription>
-          This gives us a great starting point for your recommendations.
+          Based on your preferences, how would you rate these?
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
