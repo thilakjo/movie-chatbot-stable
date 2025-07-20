@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useState } from "react";
 import { MovieCard } from "./MovieCard";
 import MovieSearch from "./MovieSearch";
 

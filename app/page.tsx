@@ -1,4 +1,4 @@
-// app/page.tsx (Minimal Version to Fix Server Error)
+// app/page.tsx (Working Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { SignInButton } from "@/components/SignInButton";
 import { SignOutButton } from "@/components/SignOutButton";
 import { Survey } from "@/components/Survey";
+import Dashboard from "@/components/Dashboard";
 import { MovieRating } from "@/components/MovieRating";
 import { CasualQuestions } from "@/components/CasualQuestions";
 
@@ -25,30 +26,20 @@ const OnboardingFlow = ({ user }: { user: any }) => {
       return <CasualQuestions />;
     case "ONBOARDING_COMPLETE":
     default:
-      // For returning users who completed onboarding - use simple fallback
+      // For returning users who completed onboarding
+      const watchlist =
+        user?.movies?.filter((m: any) => m.status === "watchlist") || [];
+      const watched =
+        user?.movies?.filter((m: any) => m.status === "watched") || [];
       return (
-        <div className="max-w-6xl mx-auto p-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            Your Movie Dashboard
-          </h1>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">
-              📊 Dashboard Status
-            </h3>
-            <p className="text-gray-700">
-              Dashboard is loading... Please refresh the page.
-            </p>
-          </div>
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">🎬</div>
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">
-              Dashboard Coming Soon
-            </h3>
-            <p className="text-gray-500">
-              The dashboard is being updated. Please try again in a moment.
-            </p>
-          </div>
-        </div>
+        <Dashboard
+          watchlist={watchlist}
+          watched={watched}
+          onRefresh={() => {
+            // This will be handled by the client component
+            window.location.reload();
+          }}
+        />
       );
   }
 };
