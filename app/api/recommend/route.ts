@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts (Final Version with Heavy Logging)
+// app/api/recommend/route.ts (Final, Most Robust Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -73,7 +73,6 @@ async function getMovieDetails(title: string) {
       leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch (error) {
-    // Log TMDb failures but don't crash the entire request
     console.error(`TMDb fetch failed for "${title}":`, error);
     return {
       posterUrl: FALLBACK_POSTER,
@@ -87,43 +86,19 @@ async function getMovieDetails(title: string) {
 }
 
 export async function POST() {
-  console.log("\n--- [recommend API] Received new request ---");
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
-
-  if (!userId) {
-    console.error("[recommend API] Unauthorized: No user ID found in session.");
+  if (!userId)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  console.log(`[recommend API] Authenticated user: ${userId}`);
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { movies: true },
   });
-  if (!user) {
-    console.error(`[recommend API] User not found in database: ${userId}`);
+  if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-  console.log("[recommend API] Successfully fetched user data from DB.");
 
-  interface UserMovie {
-    id: string;
-    movieTitle: string;
-    // Add other fields from your Prisma schema if needed
-  }
-
-  interface User {
-    id: string;
-    preferences: Record<string, any>;
-    movieRatings?: Record<string, any>;
-    movies: UserMovie[];
-    // Add other fields from your Prisma schema if needed
-  }
-
-  const excludeTitles: Set<string> = new Set(
-    user.movies.map((m: UserMovie) => m.movieTitle)
-  );
+  const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
   if (user.movieRatings) {
     Object.keys(user.movieRatings).forEach((title) => excludeTitles.add(title));
   }
@@ -137,17 +112,14 @@ export async function POST() {
   ).join(
     ", "
   )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
-  console.log("[recommend API] Generated prompt for Gemini.");
 
   let recommendations: { title: string }[] = [];
   let rawResponse = "";
 
   try {
-    console.log("[recommend API] Sending request to Gemini...");
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     rawResponse = result.response.text();
-    console.log("[recommend API] Received raw response from Gemini.");
 
     const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
     if (!jsonMatch) {
@@ -155,66 +127,39 @@ export async function POST() {
     }
 
     recommendations = JSON.parse(jsonMatch[0]);
-    console.log(
-      "[recommend API] Successfully parsed JSON from Gemini response."
-    );
 
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
-      throw new Error("AI returned empty or invalid data after parsing.");
+      throw new Error("AI returned empty or invalid data.");
     }
   } catch (e) {
-    // This is the most important log for debugging
-    console.error("--- [recommend API] GEMINI RECOMMENDATION ERROR ---");
+    console.error("--- GEMINI RECOMMENDATION ERROR ---");
     console.error("Failed to get or parse recommendations from Gemini.");
-    console.error("Raw AI Response:", rawResponse); // Log the exact response
+    console.error("Raw AI Response:", rawResponse);
     console.error("Parsing Error:", e);
     console.error("---------------------------------");
     return NextResponse.json(
       {
         error:
-          "Could not get recommendations from the AI. Please check the Vercel logs for more details.",
+          "Could not get recommendations from the AI. Please check the logs.",
       },
       { status: 500 }
     );
   }
 
-  console.log(
-    "[recommend API] Fetching details from TMDb for recommended movies..."
-  );
   const recsWithDetails = await Promise.all(
     recommendations.map((rec) =>
       getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
     )
   );
-
-  console.log(
-    "[recommend API] Fetching details from TMDb for user's existing movies..."
-  );
-  interface Movie {
-    id: string;
-    movieTitle: string;
-    // Add other fields from your Prisma schema if needed
-  }
-
-  interface MovieDetails {
-    posterUrl: string;
-    year: number | null;
-    director: string | null;
-    imdbRating: string | null;
-    leadActor: string | null;
-    title?: string;
-  }
-
-  const userMoviesWithDetails: (Movie & MovieDetails)[] = await Promise.all(
-    user.movies.map((movie: Movie) =>
-      getMovieDetails(movie.movieTitle).then((details: MovieDetails) => ({
+  const userMoviesWithDetails = await Promise.all(
+    user.movies.map((movie) =>
+      getMovieDetails(movie.movieTitle).then((details) => ({
         ...movie,
         ...details,
       }))
     )
   );
 
-  console.log("[recommend API] Request successful. Sending response.");
   return NextResponse.json({
     recommendations: recsWithDetails,
     userMovies: userMoviesWithDetails,

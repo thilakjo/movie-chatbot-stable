@@ -33,7 +33,6 @@ export async function POST(req: Request) {
     const preferences = await req.json();
     let dynamicMovies: string[] = [];
 
-    // --- NEW: Call Gemini to get a dynamic list of movies ---
     try {
       const prompt = `Based on a user's preferences for genre "${preferences.favoriteGenre}", director "${preferences.favoriteDirector}", and mood "${preferences.mood}", list 10 well-known movies that are highly relevant to their taste. The director's origin might hint at preferred movie languages. Return ONLY a valid JSON array of strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
 
@@ -54,9 +53,7 @@ export async function POST(req: Request) {
       );
       dynamicMovies = FALLBACK_MOVIES;
     }
-    // --- END NEW ---
 
-    // Save the user's text preferences AND the dynamic list for the next step
     await prisma.user.update({
       where: { id: userId },
       data: {
