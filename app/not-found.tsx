@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-900">
-      <div className="mb-6 animate-bounce-slow">
+      <div className="mb-6 animate-bounce">
         {/* Movie clapperboard SVG icon */}
         <svg
           width="120"
@@ -49,20 +49,6 @@ export default function NotFound() {
           Return to Dashboard
         </button>
       </Link>
-      <style jsx>{`
-        .animate-bounce-slow {
-          animation: bounce 2.5s infinite;
-        }
-        @keyframes bounce {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-18px);
-          }
-        }
-      `}</style>
     </div>
   );
 }
