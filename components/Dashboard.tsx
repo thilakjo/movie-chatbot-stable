@@ -36,7 +36,8 @@ export function Dashboard({
 }) {
   const [movies, setMovies] = useState(initialMovies);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [loading, setLoading] = useState(false); // Set to false initially
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [feedbackMovie, setFeedbackMovie] = useState<Recommendation | null>(
     null
   );
@@ -47,6 +48,7 @@ export function Dashboard({
   // This function now handles errors gracefully
   const fetchAllData = async () => {
     setLoading(true);
+    setError(null);
     setRecommendations([]); // Clear old recommendations
     try {
       const res = await fetch("/api/recommend", { method: "POST" });
@@ -63,15 +65,14 @@ export function Dashboard({
       );
       setRecommendations(data.recommendations || []);
     } catch (error: any) {
-      // Show an alert to the user if something goes wrong
-      alert(`Error: ${error.message}`);
+      console.error("Recommendation error:", error);
+      setError(
+        error.message || "Failed to get recommendations. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
-
-  // We don't need to fetch on initial load anymore, let the user decide.
-  // useEffect(() => { fetchAllData(); }, []);
 
   const handleListAction = async (
     title: string,
@@ -136,6 +137,20 @@ export function Dashboard({
       </div>
 
       {loading && <LoadingAnimation />}
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 font-medium">Error: {error}</p>
+          <Button
+            onClick={() => setError(null)}
+            variant="outline"
+            size="sm"
+            className="mt-2"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {!loading && recommendations.length > 0 && (
         <div className="mb-12 px-12">
@@ -260,26 +275,25 @@ export function Dashboard({
 
       <Dialog
         open={!!feedbackMovie}
-        onOpenChange={(isOpen) => !isOpen && setFeedbackMovie(null)}
+        onOpenChange={() => setFeedbackMovie(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-center mb-4">
-              Feedback for {feedbackMovie?.title}
+            <DialogTitle>
+              How was &quot;{feedbackMovie?.title}&quot;?
             </DialogTitle>
           </DialogHeader>
-          <div className="text-center">
-            <p className="mb-4 font-semibold">
-              {FEEDBACK_QUESTIONS[feedbackStep].q}
-            </p>
+          <div className="space-y-4">
+            <p className="text-lg">{FEEDBACK_QUESTIONS[feedbackStep].q}</p>
             <div className="flex flex-col gap-2">
-              {FEEDBACK_QUESTIONS[feedbackStep].o.map((opt) => (
+              {FEEDBACK_QUESTIONS[feedbackStep].o.map((option) => (
                 <Button
-                  key={opt}
+                  key={option}
+                  onClick={() => handleFeedbackAnswer(option)}
                   variant="outline"
-                  onClick={() => handleFeedbackAnswer(opt)}
+                  className="justify-start"
                 >
-                  {opt}
+                  {option}
                 </Button>
               ))}
             </div>

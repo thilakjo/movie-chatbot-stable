@@ -13,7 +13,9 @@ async function getMovieDetails(title: string) {
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(
       title
     )}`;
-    const searchRes = await fetch(searchUrl);
+    const searchRes = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(10000), // Increased timeout
+    });
     const searchData = await searchRes.json();
     if (!searchData.results || searchData.results.length === 0) return {};
 
@@ -23,8 +25,8 @@ async function getMovieDetails(title: string) {
     const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
 
     const [detailsRes, creditsRes] = await Promise.all([
-      fetch(detailsUrl),
-      fetch(creditsUrl),
+      fetch(detailsUrl, { signal: AbortSignal.timeout(10000) }),
+      fetch(creditsUrl, { signal: AbortSignal.timeout(10000) }),
     ]);
     const detailsData = await detailsRes.json();
     const creditsData = await creditsRes.json();
@@ -43,37 +45,69 @@ async function getMovieDetails(title: string) {
         creditsData.crew?.find((p: any) => p.job === "Director")?.name || null,
       leadActor: creditsData.cast?.[0]?.name || null,
     };
-  } catch {
+  } catch (error) {
+    console.error(`Error fetching movie details for "${title}":`, error);
     return {};
   }
 }
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id;
-  if (!userId)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    if (!userId)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { movieTitle, status, feedback } = await req.json();
-  if (status === "REMOVED") {
-    await prisma.userMovie.delete({
+    const movies = await prisma.userMovie.findMany({
+      where: { userId },
+      orderBy: { order: "asc" },
+    });
+
+    return NextResponse.json({ movies });
+  } catch (error) {
+    console.error("Error fetching user movies:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch movies" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    if (!userId)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { movieTitle, status, feedback } = await req.json();
+
+    if (status === "REMOVED") {
+      await prisma.userMovie.delete({
+        where: { userId_movieTitle: { userId, movieTitle } },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    const details = await getMovieDetails(movieTitle);
+
+    await prisma.userMovie.upsert({
       where: { userId_movieTitle: { userId, movieTitle } },
+      update: { status, feedback: feedback || undefined, ...details },
+      create: {
+        userId,
+        movieTitle,
+        status,
+        feedback: feedback || undefined,
+        ...details,
+      },
     });
     return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error updating user movie:", error);
+    return NextResponse.json(
+      { error: "Failed to update movie" },
+      { status: 500 }
+    );
   }
-
-  const details = await getMovieDetails(movieTitle);
-
-  await prisma.userMovie.upsert({
-    where: { userId_movieTitle: { userId, movieTitle } },
-    update: { status, feedback: feedback || undefined, ...details },
-    create: {
-      userId,
-      movieTitle,
-      status,
-      feedback: feedback || undefined,
-      ...details,
-    },
-  });
-  return NextResponse.json({ success: true });
 }

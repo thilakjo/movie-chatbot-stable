@@ -1,4 +1,4 @@
-// app/page.tsx (Corrected)
+// app/page.tsx (Fixed Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -17,8 +17,10 @@ const OnboardingFlow = ({ user }: { user: any }) => {
     case "NEEDS_INITIAL_SURVEY":
       return <Survey />;
     case "NEEDS_MOVIE_RATINGS":
-      // Correctly extract the dynamic list from the preferences object
-      const moviesToRate = (user.preferences as any)?.dynamicMoviesToRate || [];
+      // Extract the dynamic movies from preferences
+      const preferences = (user.preferences as any) || {};
+      const moviesToRate = preferences.dynamicMoviesToRate || [];
+      console.log("Movies to rate:", moviesToRate);
       return <MovieRating moviesToRate={moviesToRate} />;
     case "NEEDS_CASUAL_QUESTIONS":
       return <CasualQuestions />;

@@ -1,4 +1,4 @@
-// app/api/recommend/route.ts (Final, Most Robust Version)
+// app/api/recommend/route.ts (Fixed and Improved Version)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -25,7 +25,7 @@ async function getMovieDetails(title: string) {
       title
     )}`;
     const searchRes = await fetch(searchUrl, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000), // Increased timeout
     });
     if (!searchRes.ok)
       return {
@@ -52,8 +52,8 @@ async function getMovieDetails(title: string) {
     const creditsUrl = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${TMDB_API_KEY}`;
 
     const [detailsRes, creditsRes] = await Promise.all([
-      fetch(detailsUrl, { signal: AbortSignal.timeout(5000) }),
-      fetch(creditsUrl, { signal: AbortSignal.timeout(5000) }),
+      fetch(detailsUrl, { signal: AbortSignal.timeout(10000) }),
+      fetch(creditsUrl, { signal: AbortSignal.timeout(10000) }),
     ]);
     const detailsData = await detailsRes.json();
     const creditsData = await creditsRes.json();
@@ -86,82 +86,120 @@ async function getMovieDetails(title: string) {
 }
 
 export async function POST() {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id;
-  if (!userId)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { movies: true },
-  });
-  if (!user)
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
-  if (user.movieRatings) {
-    Object.keys(user.movieRatings).forEach((title) => excludeTitles.add(title));
-  }
-
-  const prompt = `You are a movie expert. A user has these preferences: ${JSON.stringify(
-    user.preferences
-  )}. They have rated these movies: ${JSON.stringify(
-    user.movieRatings
-  )}. They already have these movies on their lists: ${Array.from(
-    excludeTitles
-  ).join(
-    ", "
-  )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
-
-  let recommendations: { title: string }[] = [];
-  let rawResponse = "";
-
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    rawResponse = result.response.text();
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id;
+    if (!userId)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (!jsonMatch) {
-      throw new Error("No valid JSON array found in the AI response.");
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { movies: true },
+    });
+    if (!user)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    const excludeTitles = new Set(user.movies.map((m) => m.movieTitle));
+    if (user.movieRatings) {
+      Object.keys(user.movieRatings).forEach((title) =>
+        excludeTitles.add(title)
+      );
     }
 
-    recommendations = JSON.parse(jsonMatch[0]);
+    // Build a more comprehensive prompt using user preferences
+    const preferences = (user.preferences as any) || {};
+    const movieRatings = (user.movieRatings as any) || {};
 
-    if (!Array.isArray(recommendations) || recommendations.length === 0) {
-      throw new Error("AI returned empty or invalid data.");
+    let prompt = `You are a movie expert. Recommend 5 new movies that perfectly match the user's taste. `;
+
+    if (preferences.favoriteGenre) {
+      prompt += `The user's favorite genre is: ${preferences.favoriteGenre}. `;
     }
-  } catch (e) {
-    console.error("--- GEMINI RECOMMENDATION ERROR ---");
-    console.error("Failed to get or parse recommendations from Gemini.");
-    console.error("Raw AI Response:", rawResponse);
-    console.error("Parsing Error:", e);
-    console.error("---------------------------------");
+
+    if (preferences.favoriteDirector) {
+      prompt += `Their favorite director is: ${preferences.favoriteDirector}. `;
+    }
+
+    if (preferences.mood) {
+      prompt += `They want to watch: ${preferences.mood}. `;
+    }
+
+    if (preferences.casualAnswers && preferences.casualAnswers.length > 0) {
+      prompt += `Additional preferences: ${preferences.casualAnswers.join(
+        ", "
+      )}. `;
+    }
+
+    if (Object.keys(movieRatings).length > 0) {
+      const likedMovies = Object.entries(movieRatings)
+        .filter(([_, rating]) => rating === "Good")
+        .map(([title, _]) => title);
+      if (likedMovies.length > 0) {
+        prompt += `They liked these movies: ${likedMovies.join(", ")}. `;
+      }
+    }
+
+    prompt += `Exclude these movies they already have: ${Array.from(
+      excludeTitles
+    ).join(", ")}. `;
+    prompt += `Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
+
+    let recommendations: { title: string }[] = [];
+    let rawResponse = "";
+
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(prompt);
+      rawResponse = result.response.text();
+
+      const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (!jsonMatch) {
+        throw new Error("No valid JSON array found in the AI response.");
+      }
+
+      recommendations = JSON.parse(jsonMatch[0]);
+
+      if (!Array.isArray(recommendations) || recommendations.length === 0) {
+        throw new Error("AI returned empty or invalid data.");
+      }
+    } catch (e) {
+      console.error("--- GEMINI RECOMMENDATION ERROR ---");
+      console.error("Failed to get or parse recommendations from Gemini.");
+      console.error("Raw AI Response:", rawResponse);
+      console.error("Parsing Error:", e);
+      console.error("User preferences:", preferences);
+      console.error("---------------------------------");
+      return NextResponse.json(
+        {
+          error: "AI failed to generate recommendations. Please try again.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const recsWithDetails = await Promise.all(
+      recommendations.map((rec) =>
+        getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
+      )
+    );
+    const userMoviesWithDetails = await Promise.all(
+      user.movies.map((movie) =>
+        getMovieDetails(movie.movieTitle).then((details) => ({
+          ...movie,
+          ...details,
+        }))
+      )
+    );
+
+    return NextResponse.json({
+      recommendations: recsWithDetails,
+      userMovies: userMoviesWithDetails,
+    });
+  } catch (error) {
+    console.error("Recommendation API error:", error);
     return NextResponse.json(
-      {
-        error:
-          "Could not get recommendations from the AI. Please check the logs.",
-      },
+      { error: "Internal server error. Please try again." },
       { status: 500 }
     );
   }
-
-  const recsWithDetails = await Promise.all(
-    recommendations.map((rec) =>
-      getMovieDetails(rec.title).then((details) => ({ ...rec, ...details }))
-    )
-  );
-  const userMoviesWithDetails = await Promise.all(
-    user.movies.map((movie) =>
-      getMovieDetails(movie.movieTitle).then((details) => ({
-        ...movie,
-        ...details,
-      }))
-    )
-  );
-
-  return NextResponse.json({
-    recommendations: recsWithDetails,
-    userMovies: userMoviesWithDetails,
-  });
 }
