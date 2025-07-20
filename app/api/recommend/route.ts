@@ -1,22 +1,22 @@
-// app/api/recommend/route.ts (Production-Ready Version with Quota Fallback)
+// app/api/recommend/route.ts (3-Tier Fallback System)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 const prisma = new PrismaClient();
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const FALLBACK_POSTER = "/fallback-poster.svg";
 
-// Validate Gemini API key
+// Initialize AI services
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY is not set in environment variables");
-}
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
 // Curated fallback movies for different genres
 const FALLBACK_MOVIES = {
@@ -211,9 +211,65 @@ function getFallbackRecommendations(
   return movieList.map((title) => ({ title }));
 }
 
+// Try OpenAI GPT-4 for recommendations
+async function tryOpenAIRecommendations(
+  prompt: string
+): Promise<{ title: string }[]> {
+  if (!openai) {
+    throw new Error("OpenAI not available");
+  }
+
+  try {
+    console.log("Attempting OpenAI GPT-4 call...");
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content:
+            'You are a movie expert. Return ONLY a valid JSON array of objects with \'title\' key. Example: [{"title": "The Shawshank Redemption"}]',
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const response = completion.choices[0]?.message?.content || "";
+    console.log("OpenAI response:", response.substring(0, 200) + "...");
+
+    // Try to parse JSON response
+    const jsonMatch = response.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (!jsonMatch) {
+      throw new Error("No valid JSON array found in OpenAI response");
+    }
+
+    let recommendations = JSON.parse(jsonMatch[0]);
+
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      throw new Error("OpenAI returned empty or invalid array");
+    }
+
+    // Ensure we have exactly 5 recommendations
+    if (recommendations.length > 5) {
+      recommendations = recommendations.slice(0, 5);
+    }
+
+    console.log("Successfully parsed OpenAI recommendations:", recommendations);
+    return recommendations;
+  } catch (error) {
+    console.error("OpenAI recommendation failed:", error);
+    throw error;
+  }
+}
+
 export async function POST() {
   try {
-    console.log("=== RECOMMENDATION API START ===");
+    console.log("=== RECOMMENDATION API START (3-Tier Fallback) ===");
 
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
@@ -314,13 +370,10 @@ export async function POST() {
     let recommendations: { title: string }[] = [];
     let rawResponse = "";
 
-    // Check if Gemini API is available
-    if (!genAI) {
-      console.log("Gemini AI not available - using fallback");
-      recommendations = getFallbackRecommendations(preferences, excludeTitles);
-    } else {
+    // TIER 1: Try Gemini AI
+    if (genAI) {
       try {
-        console.log("Attempting Gemini AI call...");
+        console.log("TIER 1: Attempting Gemini AI call...");
 
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -345,87 +398,64 @@ export async function POST() {
           throw new Error("No valid JSON array found in the AI response.");
         }
 
-        recommendations = JSON.parse(jsonMatch[0]);
+        const geminiRecs = JSON.parse(jsonMatch[0]);
 
-        if (!Array.isArray(recommendations) || recommendations.length === 0) {
+        if (!Array.isArray(geminiRecs) || geminiRecs.length === 0) {
           console.error("Gemini returned empty or invalid array");
           throw new Error("AI returned empty or invalid data.");
         }
 
         // Ensure we have exactly 5 recommendations
-        if (recommendations.length > 5) {
-          recommendations = recommendations.slice(0, 5);
+        if (geminiRecs.length > 5) {
+          recommendations = geminiRecs.slice(0, 5);
+        } else {
+          recommendations = geminiRecs;
         }
 
-        console.log("Successfully parsed recommendations:", recommendations);
+        console.log(
+          "✅ TIER 1 SUCCESS: Gemini recommendations:",
+          recommendations
+        );
       } catch (e: any) {
-        console.error("--- GEMINI RECOMMENDATION ERROR ---");
-        console.error("Failed to get or parse recommendations from Gemini.");
-        console.error("Raw AI Response:", rawResponse);
-        console.error("Parsing Error:", e);
-        console.error("User preferences:", preferences);
-        console.error("---------------------------------");
+        console.error("❌ TIER 1 FAILED: Gemini AI error");
+        console.error("Error:", e.message);
 
         // Check if it's a quota error
         if (
-          (e.message && e.message.includes("quota")) ||
-          e.message.includes("429")
+          e.message &&
+          (e.message.includes("quota") || e.message.includes("429"))
         ) {
-          console.log("Quota exceeded - using fallback recommendations");
-          recommendations = getFallbackRecommendations(
-            preferences,
-            excludeTitles
-          );
+          console.log("🔄 Quota exceeded - trying TIER 2 (OpenAI)...");
         } else {
-          // Try a simpler fallback approach
-          try {
-            console.log("Attempting fallback recommendation generation...");
-            const fallbackPrompt = `Recommend 5 popular movies that are critically acclaimed. Return ONLY a valid JSON array of objects with "title" key. Example: [{"title": "The Shawshank Redemption"}]`;
-
-            const model = genAI.getGenerativeModel({
-              model: "gemini-1.5-flash",
-            });
-            const fallbackResult = await model.generateContent(fallbackPrompt);
-            const fallbackResponse = fallbackResult.response.text();
-
-            console.log(
-              "Fallback response:",
-              fallbackResponse.substring(0, 200) + "..."
-            );
-
-            const fallbackJsonMatch = fallbackResponse.match(
-              /\[\s*\{[\s\S]*\}\s*\]/
-            );
-            if (fallbackJsonMatch) {
-              recommendations = JSON.parse(fallbackJsonMatch[0]);
-              if (
-                Array.isArray(recommendations) &&
-                recommendations.length > 0
-              ) {
-                console.log(
-                  "Fallback recommendations successful:",
-                  recommendations
-                );
-                // Continue with fallback recommendations
-              } else {
-                throw new Error("Fallback also failed");
-              }
-            } else {
-              throw new Error("Fallback also failed");
-            }
-          } catch (fallbackError) {
-            console.error(
-              "Fallback recommendation also failed:",
-              fallbackError
-            );
-            console.log("Using curated fallback recommendations");
-            recommendations = getFallbackRecommendations(
-              preferences,
-              excludeTitles
-            );
-          }
+          console.log("🔄 Gemini failed - trying TIER 2 (OpenAI)...");
         }
       }
+    }
+
+    // TIER 2: Try OpenAI GPT-4 if Gemini failed
+    if (recommendations.length === 0 && openai) {
+      try {
+        console.log("TIER 2: Attempting OpenAI GPT-4 call...");
+        recommendations = await tryOpenAIRecommendations(prompt);
+        console.log(
+          "✅ TIER 2 SUCCESS: OpenAI recommendations:",
+          recommendations
+        );
+      } catch (e: any) {
+        console.error("❌ TIER 2 FAILED: OpenAI error");
+        console.error("Error:", e.message);
+        console.log("🔄 OpenAI failed - using TIER 3 (Curated fallbacks)...");
+      }
+    }
+
+    // TIER 3: Use curated fallback movies if both AI services failed
+    if (recommendations.length === 0) {
+      console.log("TIER 3: Using curated fallback recommendations");
+      recommendations = getFallbackRecommendations(preferences, excludeTitles);
+      console.log(
+        "✅ TIER 3 SUCCESS: Fallback recommendations:",
+        recommendations
+      );
     }
 
     // Fetch movie details with better error handling
