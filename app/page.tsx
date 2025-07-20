@@ -1,10 +1,11 @@
-// app/page.tsx (Minimal Debug Version)
+// app/page.tsx (Test Survey Component)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { SignInButton } from "@/components/SignInButton";
 import { SignOutButton } from "@/components/SignOutButton";
+import { Survey } from "@/components/Survey";
 
 const prisma = new PrismaClient();
 
@@ -56,18 +57,11 @@ export default async function Home() {
       );
     }
 
-    // Simple onboarding flow without complex components
+    // Simple onboarding flow - test Survey component
     let content;
     switch (user.onboardingStep) {
       case "NEEDS_INITIAL_SURVEY":
-        content = (
-          <div className="max-w-6xl mx-auto p-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">
-              Survey Step
-            </h1>
-            <p className="text-gray-600">Survey component would load here.</p>
-          </div>
-        );
+        content = <Survey />;
         break;
       case "NEEDS_MOVIE_RATINGS":
         content = (
