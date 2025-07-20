@@ -1,7 +1,7 @@
 // components/MovieRating.tsx (5-Star Batch UI)
 
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,6 +97,12 @@ export function MovieRating({ moviesToRate, onComplete }: MovieRatingProps) {
   };
 
   if (submitted) {
+    useEffect(() => {
+      const timeout = setTimeout(() => {
+        window.location.reload();
+      }, 2500);
+      return () => clearTimeout(timeout);
+    }, []);
     return (
       <Card className="max-w-2xl mx-auto animate-fadeIn">
         <CardHeader>
