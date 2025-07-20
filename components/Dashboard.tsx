@@ -36,31 +36,11 @@ export default function Dashboard({
     "watchlist"
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [learningData, setLearningData] = useState<any>(null);
-
-  // Fetch learning data to show system improvement
-  useEffect(() => {
-    fetchLearningData();
-  }, [watchlist, watched]);
-
-  const fetchLearningData = async () => {
-    try {
-      const response = await fetch("/api/debug-learning");
-      const data = await response.json();
-      if (data.success) {
-        setLearningData(data.learningData);
-      }
-    } catch (error) {
-      console.error("Failed to fetch learning data:", error);
-    }
-  };
 
   const handleMovieAdded = (movieTitle: string) => {
     console.log(`Movie added to watched: ${movieTitle}`);
     // Refresh the dashboard to show updated data
     onRefresh();
-    // Fetch updated learning data
-    fetchLearningData();
   };
 
   const handleMoveToWatched = async (movieId: string, movieTitle: string) => {
@@ -77,7 +57,6 @@ export default function Dashboard({
       if (response.ok) {
         console.log(`Moved ${movieTitle} to watched`);
         onRefresh();
-        fetchLearningData();
       } else {
         console.error("Failed to move movie to watched");
       }
@@ -102,7 +81,6 @@ export default function Dashboard({
       if (response.ok) {
         console.log(`Moved ${movieTitle} to watchlist`);
         onRefresh();
-        fetchLearningData();
       } else {
         console.error("Failed to move movie to watchlist");
       }
@@ -131,38 +109,27 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Learning System Status */}
-        {learningData && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">
-              🤖 AI Learning System
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="font-medium">Movies Rated:</span>{" "}
-                {learningData.movieRatings.totalRated}
-              </div>
-              <div>
-                <span className="font-medium">Liked:</span>{" "}
-                {learningData.movieRatings.likedCount}
-              </div>
-              <div>
-                <span className="font-medium">Watchlist:</span>{" "}
-                {learningData.watchlist.count}
-              </div>
-              <div>
-                <span className="font-medium">Watched:</span>{" "}
-                {learningData.watched.count}
-              </div>
+        {/* Simple Stats */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">
+            📊 Your Movie Stats
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Watchlist:</span> {watchlist.length}
             </div>
-            {learningData.genreAnalysis.likedGenres.length > 0 && (
-              <div className="mt-2 text-sm">
-                <span className="font-medium">System learned you like:</span>{" "}
-                {learningData.genreAnalysis.likedGenres.join(", ")}
-              </div>
-            )}
+            <div>
+              <span className="font-medium">Watched:</span> {watched.length}
+            </div>
+            <div>
+              <span className="font-medium">Total Movies:</span>{" "}
+              {watchlist.length + watched.length}
+            </div>
+            <div>
+              <span className="font-medium">Status:</span> Active
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Tabs */}
