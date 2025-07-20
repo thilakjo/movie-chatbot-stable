@@ -73,6 +73,7 @@ async function getMovieDetails(title: string) {
       leadActor: creditsData.cast?.[0]?.name || null,
     };
   } catch (error) {
+    console.error(`TMDb fetch failed for "${title}":`, error);
     return {
       posterUrl: FALLBACK_POSTER,
       year: null,
@@ -113,12 +114,12 @@ export async function POST() {
   )}. Recommend 5 new movies they haven't seen that perfectly match their taste. Return ONLY a valid JSON array of objects, where each object has a "title" key. Example: [{"title": "Blade Runner 2049"}]`;
 
   let recommendations: { title: string }[] = [];
-  let rawResponse = ""; // Variable to store the raw AI response
+  let rawResponse = "";
 
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
-    rawResponse = result.response.text(); // Store the raw text
+    rawResponse = result.response.text();
 
     // A more robust way to find and parse the JSON block
     const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);

@@ -1,4 +1,4 @@
-// app/page.tsx
+// app/page.tsx (Corrected)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -17,12 +17,14 @@ const OnboardingFlow = ({ user }: { user: any }) => {
     case "NEEDS_INITIAL_SURVEY":
       return <Survey />;
     case "NEEDS_MOVIE_RATINGS":
+      // Correctly extract the dynamic list from the preferences object
       const moviesToRate = (user.preferences as any)?.dynamicMoviesToRate || [];
       return <MovieRating moviesToRate={moviesToRate} />;
     case "NEEDS_CASUAL_QUESTIONS":
       return <CasualQuestions />;
     default:
-      return <Dashboard initialMovies={[]} />;
+      // Fallback for returning users or completed onboarding
+      return <Dashboard initialMovies={user?.movies || []} />;
   }
 };
 

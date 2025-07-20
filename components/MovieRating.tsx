@@ -1,4 +1,4 @@
-// components/MovieRating.tsx
+// components/MovieRating.tsx (Corrected)
 
 "use client";
 import { useState } from "react";
@@ -35,6 +35,18 @@ export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
     router.refresh();
   };
 
+  // If for some reason the dynamic list is empty, show a loading/error state.
+  if (!moviesToRate || moviesToRate.length === 0) {
+    return (
+      <Card className="max-w-2xl mx-auto animate-fadeIn">
+        <CardHeader>
+          <CardTitle>Generating Your Movie List...</CardTitle>
+          <CardDescription>Please wait a moment.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   return (
     <Card className="max-w-2xl mx-auto animate-fadeIn">
       <CardHeader>
@@ -49,7 +61,7 @@ export function MovieRating({ moviesToRate }: { moviesToRate: string[] }) {
             <Label className="font-semibold">{movie}</Label>
             <RadioGroup
               onValueChange={(value) => handleRatingChange(movie, value)}
-              className="flex space-x-4 mt-2"
+              className="flex flex-wrap gap-x-4 gap-y-2 mt-2"
             >
               {["Good", "Okay", "Didn't like", "Not watched"].map((option) => (
                 <div key={option} className="flex items-center space-x-2">

@@ -1,4 +1,4 @@
-// app/api/survey/route.ts (Corrected with Robust Error Handling)
+// app/api/survey/route.ts (Corrected)
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -8,20 +8,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-// A default list of movies to use if the AI fails
-const FALLBACK_MOVIES = [
-  "Inception",
-  "The Dark Knight",
-  "Pulp Fiction",
-  "Forrest Gump",
-  "The Matrix",
-  "Interstellar",
-  "Parasite",
-  "Gladiator",
-  "The Departed",
-  "Whiplash",
-];
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -35,11 +21,10 @@ export async function POST(req: Request) {
     const preferences = await req.json();
     let dynamicMovies: string[] = [];
 
-    // --- NEW: Robust try/catch block for the Gemini API call ---
     try {
       const prompt = `Based on these user preferences: ${JSON.stringify(
         preferences
-      )}, list 10 well-known movies that are highly relevant to their taste and the director (his movies language) focus mainly on the language of the director (if available). IMPORTANT: Return ONLY a JSON array of strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
+      )}. A user's favorite director's language might indicate their preferred movie language. List 10 well-known movies that are highly relevant to their taste. Return ONLY a valid JSON array of strings. Example: ["Inception", "The Matrix", "Blade Runner 2049"]`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent(prompt);
@@ -48,17 +33,16 @@ export async function POST(req: Request) {
       const cleanedText = text.replace(/```json|```/g, "").trim();
       dynamicMovies = JSON.parse(cleanedText);
 
-      // Ensure we have exactly 10 movies
-      if (dynamicMovies.length !== 10) {
-        throw new Error("Gemini did not return 10 movies.");
+      if (!Array.isArray(dynamicMovies) || dynamicMovies.length === 0) {
+        throw new Error("Gemini did not return a valid movie list.");
       }
     } catch (e) {
-      console.error("Gemini call failed, using fallback list. Error:", e);
-      dynamicMovies = FALLBACK_MOVIES;
+      console.error(
+        "Gemini call for dynamic movie list failed, using fallback. Error:",
+        e
+      );
     }
-    // --- END NEW ---
 
-    // Save the user's text preferences AND the dynamic list for the next step
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -72,6 +56,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("Error in survey API:", error);
     return NextResponse.json(
       { error: "Failed to save preferences" },
       { status: 500 }
