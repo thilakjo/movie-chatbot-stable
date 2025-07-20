@@ -19,6 +19,7 @@ import {
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MovieWithDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { Heart, Bookmark, Eye, X, Search } from "lucide-react";
 
 // Local Recommendation type for dashboard
 type Recommendation = {
@@ -212,6 +213,7 @@ export function Dashboard({
   const [showAll, setShowAll] = useState({ watchlist: false, watched: false });
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [modalRec, setModalRec] = useState<Recommendation | null>(null);
 
   // This function now handles errors gracefully and preserves existing movies
   const fetchAllData = async () => {
@@ -371,110 +373,86 @@ export function Dashboard({
                   key={rec.title}
                   className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5"
                 >
-                  <MovieCard title={rec.title} initialData={rec as any}>
-                    {/* Overlay for desktop hover or mobile tap */}
-                    <div
-                      className={`w-full h-full flex flex-col items-center justify-center transition-opacity duration-200 ${
-                        isMobile
-                          ? activeCard === rec.title
-                            ? "opacity-100 z-20"
-                            : "opacity-0 pointer-events-none"
-                          : "group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isMobile && activeCard !== rec.title)
-                          setActiveCard(rec.title);
-                      }}
-                    >
-                      <Card className="w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90">
+                  <MovieCard
+                    title={rec.title}
+                    initialData={rec as any}
+                    onClick={() => {
+                      if (isMobile) setModalRec(rec);
+                    }}
+                  >
+                    {/* Desktop overlay */}
+                    {!isMobile && (
+                      <Card className="w-full shadow-lg border-none bg-white/90 dark:bg-gray-900/90 group-hover:opacity-100 opacity-0 sm:opacity-0 sm:group-hover:opacity-100 z-20 transition-opacity duration-200">
                         <CardContent className="flex flex-col gap-2 p-3 sm:p-2">
-                          {/* Description/Explanation */}
                           <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
                             {rec.explanation && rec.explanation.length > 10
                               ? rec.explanation
                               : `Why this movie? This is a top pick based on your preferences, ratings, and vibe check!`}
                           </div>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleListAction(rec.title, "LIKED");
-                              if (isMobile) setActiveCard(null);
-                            }}
-                            size="sm"
-                            variant="outline"
-                            className="w-full text-xs h-10 flex items-center justify-center gap-1"
-                          >
-                            <span role="img" aria-label="Like">
-                              ❤️
-                            </span>{" "}
-                            Like
-                          </Button>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleListAction(rec.title, "WATCHLIST");
-                              if (isMobile) setActiveCard(null);
-                            }}
-                            size="sm"
-                            className="w-full text-xs h-10"
-                          >
-                            Watchlist
-                          </Button>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMarkRecommendationAsWatched(rec);
-                              if (isMobile) setActiveCard(null);
-                            }}
-                            size="sm"
-                            className="w-full text-xs h-10"
-                          >
-                            Watched
-                          </Button>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleListAction(rec.title, "DISMISSED");
-                              if (isMobile) setActiveCard(null);
-                            }}
-                            size="sm"
-                            variant="outline"
-                            className="w-full text-xs h-10 bg-black/50 border-white/50 text-white hover:bg-black/70"
-                          >
-                            Dismiss
-                          </Button>
-                          {/* Google it button */}
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const query = encodeURIComponent(
-                                rec.title + (rec.year ? ` ${rec.year}` : "")
-                              );
-                              window.open(
-                                `https://www.google.com/search?q=${query}`,
-                                "_blank"
-                              );
-                            }}
-                            size="sm"
-                            variant="secondary"
-                            className="w-full text-xs h-10"
-                          >
-                            Google it
-                          </Button>
-                          {isMobile && (
+                          <div className="flex flex-col gap-2">
                             <Button
-                              onClick={() => setActiveCard(null)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleListAction(rec.title, "LIKED");
+                              }}
                               size="sm"
-                              variant="ghost"
-                              className="w-full text-xs h-8 mt-1"
+                              variant="outline"
+                              className="w-full text-xs h-10 flex items-center justify-center gap-2"
                             >
-                              Close
+                              <Heart className="w-4 h-4" /> Like
                             </Button>
-                          )}
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleListAction(rec.title, "WATCHLIST");
+                              }}
+                              size="sm"
+                              className="w-full text-xs h-10 flex items-center justify-center gap-2"
+                            >
+                              <Bookmark className="w-4 h-4" /> Watchlist
+                            </Button>
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkRecommendationAsWatched(rec);
+                              }}
+                              size="sm"
+                              className="w-full text-xs h-10 flex items-center justify-center gap-2"
+                            >
+                              <Eye className="w-4 h-4" /> Watched
+                            </Button>
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleListAction(rec.title, "DISMISSED");
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="w-full text-xs h-10 bg-black/50 border-white/50 text-white hover:bg-black/70 flex items-center justify-center gap-2"
+                            >
+                              <X className="w-4 h-4" /> Dismiss
+                            </Button>
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const query = encodeURIComponent(
+                                  rec.title + (rec.year ? ` ${rec.year}` : "")
+                                );
+                                window.open(
+                                  `https://www.google.com/search?q=${query}`,
+                                  "_blank"
+                                );
+                              }}
+                              size="sm"
+                              variant="secondary"
+                              className="w-full text-xs h-10 flex items-center justify-center gap-2"
+                            >
+                              <Search className="w-4 h-4" /> Google it
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
-                    </div>
+                    )}
                   </MovieCard>
                 </CarouselItem>
               ))}
@@ -482,6 +460,103 @@ export function Dashboard({
             <CarouselPrevious />
             <CarouselNext />
           </Carousel>
+          {/* Mobile Modal Dialog for Recommendation Actions */}
+          <Dialog
+            open={!!modalRec}
+            onOpenChange={(open) => !open && setModalRec(null)}
+          >
+            <DialogContent className="max-w-xs w-full rounded-xl p-0 overflow-hidden">
+              {modalRec && (
+                <div className="flex flex-col items-center p-4 gap-3">
+                  <img
+                    src={modalRec.posterUrl || "/fallback-poster.png"}
+                    alt={modalRec.title}
+                    className="w-32 h-48 object-cover rounded-lg shadow-md mb-2"
+                  />
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold mb-1">{modalRec.title}</h3>
+                    <div className="text-xs text-gray-500 mb-1">
+                      {modalRec.year || ""}
+                    </div>
+                    <div className="text-xs text-gray-700 bg-yellow-50 rounded p-2 mb-2 border border-yellow-200">
+                      {modalRec.explanation && modalRec.explanation.length > 10
+                        ? modalRec.explanation
+                        : `Why this movie? This is a top pick based on your preferences, ratings, and vibe check!`}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full mt-2">
+                    <Button
+                      onClick={() => {
+                        handleListAction(modalRec.title, "LIKED");
+                        setModalRec(null);
+                      }}
+                      size="lg"
+                      variant="outline"
+                      className="w-full text-base h-12 flex items-center justify-center gap-2"
+                    >
+                      <Heart className="w-5 h-5" /> Like
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleListAction(modalRec.title, "WATCHLIST");
+                        setModalRec(null);
+                      }}
+                      size="lg"
+                      className="w-full text-base h-12 flex items-center justify-center gap-2"
+                    >
+                      <Bookmark className="w-5 h-5" /> Watchlist
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleMarkRecommendationAsWatched(modalRec);
+                        setModalRec(null);
+                      }}
+                      size="lg"
+                      className="w-full text-base h-12 flex items-center justify-center gap-2"
+                    >
+                      <Eye className="w-5 h-5" /> Watched
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleListAction(modalRec.title, "DISMISSED");
+                        setModalRec(null);
+                      }}
+                      size="lg"
+                      variant="outline"
+                      className="w-full text-base h-12 bg-black/50 border-white/50 text-white hover:bg-black/70 flex items-center justify-center gap-2"
+                    >
+                      <X className="w-5 h-5" /> Dismiss
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        const query = encodeURIComponent(
+                          modalRec.title +
+                            (modalRec.year ? ` ${modalRec.year}` : "")
+                        );
+                        window.open(
+                          `https://www.google.com/search?q=${query}`,
+                          "_blank"
+                        );
+                      }}
+                      size="lg"
+                      variant="secondary"
+                      className="w-full text-base h-12 flex items-center justify-center gap-2"
+                    >
+                      <Search className="w-5 h-5" /> Google it
+                    </Button>
+                    <Button
+                      onClick={() => setModalRec(null)}
+                      size="lg"
+                      variant="ghost"
+                      className="w-full text-base h-10 mt-1"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       )}
 

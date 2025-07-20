@@ -14,7 +14,8 @@ const FALLBACK_POSTER = "/fallback-poster.svg";
 // Initialize AI services
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const COHERE_API_KEY = process.env.COHERE_API_KEY;
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
@@ -301,6 +302,66 @@ async function getAIExplanation(
   return "Recommended based on your taste profile.";
 }
 
+async function tryHuggingFace(prompt: string): Promise<{ title: string }[]> {
+  if (!HUGGINGFACE_API_KEY) return [];
+  const response = await fetch(
+    "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { max_new_tokens: 200 },
+      }),
+    }
+  );
+  const data = await response.json();
+  const text = Array.isArray(data)
+    ? data[0]?.generated_text
+    : data?.generated_text;
+  if (!text) return [];
+  const match =
+    text.match(/\[\s*\{[\s\S]*\}\s*\]/) ||
+    text.match(/\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/);
+  if (!match) return [];
+  let arr = JSON.parse(match[0]);
+  // If array of strings, convert to {title: string}
+  if (arr.length && typeof arr[0] === "string")
+    arr = arr.map((title: string) => ({ title }));
+  return arr;
+}
+
+async function tryCohere(prompt: string): Promise<{ title: string }[]> {
+  if (!COHERE_API_KEY) return [];
+  const response = await fetch("https://api.cohere.ai/v1/chat", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${COHERE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "command-r-plus",
+      message: prompt,
+      max_tokens: 200,
+      temperature: 0.7,
+    }),
+  });
+  const data = await response.json();
+  const text = data?.text || data?.generations?.[0]?.text;
+  if (!text) return [];
+  const match =
+    text.match(/\[\s*\{[\s\S]*\}\s*\]/) ||
+    text.match(/\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/);
+  if (!match) return [];
+  let arr = JSON.parse(match[0]);
+  if (arr.length && typeof arr[0] === "string")
+    arr = arr.map((title: string) => ({ title }));
+  return arr;
+}
+
 export async function POST() {
   try {
     console.log("=== RECOMMENDATION API START (3-Tier Fallback) ===");
@@ -445,93 +506,86 @@ export async function POST() {
 
     let recommendations: { title: string }[] = [];
     let rawResponse = "";
+    let aiError = null;
 
-    // TIER 1: Try Gemini AI
+    // 1. Gemini
     if (genAI) {
       try {
-        console.log("TIER 1: Attempting Gemini AI call...");
-
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-        // Add timeout for Gemini call
         const geminiController = new AbortController();
         const geminiTimeout = setTimeout(() => geminiController.abort(), 15000);
-
-        console.log("Sending prompt to Gemini...");
         const result = await model.generateContent(prompt);
         clearTimeout(geminiTimeout);
-
         rawResponse = result.response.text();
-        console.log("Gemini raw response length:", rawResponse.length);
-        console.log(
-          "Gemini raw response preview:",
-          rawResponse.substring(0, 200) + "..."
-        );
-
-        const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        const jsonMatch =
+          rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/) ||
+          rawResponse.match(/\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/);
         if (!jsonMatch) {
-          console.error("No valid JSON array found in Gemini response");
-          throw new Error("No valid JSON array found in the AI response.");
-        }
-
-        const geminiRecs = JSON.parse(jsonMatch[0]);
-
-        if (!Array.isArray(geminiRecs) || geminiRecs.length === 0) {
-          console.error("Gemini returned empty or invalid array");
-          throw new Error("AI returned empty or invalid data.");
-        }
-
-        // Ensure we have exactly 5 recommendations
-        if (geminiRecs.length > 5) {
-          recommendations = geminiRecs.slice(0, 5);
+          aiError = "No valid JSON array found in Gemini response";
         } else {
-          recommendations = geminiRecs;
+          let arr = JSON.parse(jsonMatch[0]);
+          if (arr.length && typeof arr[0] === "string")
+            arr = arr.map((title: string) => ({ title }));
+          recommendations = arr;
         }
-
-        console.log(
-          "✅ TIER 1 SUCCESS: Gemini recommendations:",
-          recommendations
-        );
       } catch (e: any) {
-        console.error("❌ TIER 1 FAILED: Gemini AI error");
-        console.error("Error:", e.message);
-
-        // Check if it's a quota error
-        if (
-          e.message &&
-          (e.message.includes("quota") || e.message.includes("429"))
-        ) {
-          console.log("🔄 Quota exceeded - trying TIER 2 (OpenAI)...");
-        } else {
-          console.log("🔄 Gemini failed - trying TIER 2 (OpenAI)...");
-        }
+        aiError = e.message || "Gemini AI error";
       }
     }
-
-    // TIER 2: Try OpenAI GPT-4 if Gemini failed
-    if (recommendations.length === 0 && openai) {
+    // 2. OpenAI
+    if (!recommendations.length && openai) {
       try {
-        console.log("TIER 2: Attempting OpenAI GPT-4 call...");
-        recommendations = await tryOpenAIRecommendations(prompt);
-        console.log(
-          "✅ TIER 2 SUCCESS: OpenAI recommendations:",
-          recommendations
-        );
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content:
+                'You are a movie expert. Return ONLY a valid JSON array of objects with "title" key. Example: [{"title": "The Shawshank Redemption"}]',
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        const response = completion.choices[0]?.message?.content || "";
+        const jsonMatch =
+          response.match(/\[\s*\{[\s\S]*\}\s*\]/) ||
+          response.match(/\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/);
+        if (!jsonMatch) {
+          aiError = "No valid JSON array found in OpenAI response";
+        } else {
+          let arr = JSON.parse(jsonMatch[0]);
+          if (arr.length && typeof arr[0] === "string")
+            arr = arr.map((title: string) => ({ title }));
+          recommendations = arr;
+        }
       } catch (e: any) {
-        console.error("❌ TIER 2 FAILED: OpenAI error");
-        console.error("Error:", e.message);
-        console.log("🔄 OpenAI failed - using TIER 3 (Curated fallbacks)...");
+        aiError = e.message || "OpenAI error";
       }
     }
-
-    // TIER 3: Use curated fallback movies if both AI services failed
-    if (recommendations.length === 0) {
-      console.log("TIER 3: Using curated fallback recommendations");
+    // 3. Hugging Face
+    if (!recommendations.length && HUGGINGFACE_API_KEY) {
+      try {
+        recommendations = await tryHuggingFace(prompt);
+      } catch (e: any) {
+        aiError = e.message || "Hugging Face error";
+      }
+    }
+    // 4. Cohere
+    if (!recommendations.length && COHERE_API_KEY) {
+      try {
+        recommendations = await tryCohere(prompt);
+      } catch (e: any) {
+        aiError = e.message || "Cohere error";
+      }
+    }
+    // 5. Fallback
+    if (!recommendations.length) {
       recommendations = getFallbackRecommendations(preferences, excludeTitles);
-      console.log(
-        "✅ TIER 3 SUCCESS: Fallback recommendations:",
-        recommendations
-      );
     }
 
     // Fetch movie details with better error handling
